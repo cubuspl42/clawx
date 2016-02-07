@@ -1,0 +1,23 @@
+EXPORTS
+AcquireDDThreadLock=__E__0__ @1
+CompleteCreateSysmemSurface=__E__1__ @2
+D3DParseUnknownCommand=__E__2__ @3
+DDGetAttachedSurfaceLcl=__E__3__ @4
+DDInternalLock=__E__4__ @5
+DDInternalUnlock=__E__5__ @6
+DSoundHelp=__E__6__ @7
+DirectDrawCreate=__E__7__ @8
+DirectDrawCreateClipper=__E__8__ @9
+DirectDrawCreateEx=__E__9__ @10
+DirectDrawEnumerateA=__E__10__ @11
+DirectDrawEnumerateExA=__E__11__ @12
+DirectDrawEnumerateExW=__E__12__ @13
+DirectDrawEnumerateW=__E__13__ @14
+DllCanUnloadNow=__E__14__ @15
+DllGetClassObject=__E__15__ @16
+GetDDSurfaceLocal=__E__16__ @17
+GetOLEThunkData=__E__17__ @18
+GetSurfaceFromDC=__E__18__ @19
+RegisterSpecialCase=__E__19__ @20
+ReleaseDDThreadLock=__E__20__ @21
+SetAppCompatData=__E__21__ @22

@@ -1,0 +1,67 @@
+Microsoft (R) COFF/PE Dumper Version 14.00.23506.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+Dump of file SMACKW32.DLL
+
+File Type: DLL
+
+  Section contains the following exports for smackw32.dll
+
+    00000000 characteristics
+           0 time date stamp
+        0.00 version
+           1 ordinal base
+          39 number of functions
+          39 number of names
+
+    ordinal hint RVA      name
+
+         37    0 00007E80 _SetDirectSoundHWND@4
+          3    1 00001D90 _SmackBufferBlit@32
+          8    2 00001840 _SmackBufferClear@8
+          6    3 00001964 _SmackBufferClose@4
+         13    4 00001180 _SmackBufferCopyPalette@12
+          4    5 00001D50 _SmackBufferFocused@4
+         12    6 00001280 _SmackBufferFromScreen@16
+          5    7 00001A60 _SmackBufferNewPalette@12
+          2    8 00002228 _SmackBufferOpen@24
+          7    9 000018B0 _SmackBufferSetPalette@4
+          1    A 00002CF0 _SmackBufferString@8
+         10    B 00001640 _SmackBufferToBuffer@32
+         11    C 00001550 _SmackBufferToBufferTrans@36
+         18    D 00004B50 _SmackClose@4
+         25    E 00003800 _SmackColorRemap@16
+         24    F 00003AA0 _SmackColorTrans@8
+         19   10 000045C0 _SmackDoFrame@4
+         16   11 00004EB0 _SmackFrameRate@4
+         26   12 000036D0 _SmackGetTrackData@12
+         27   13 00003690 _SmackGoto@8
+         21   14 000042B0 _SmackNextFrame@4
+         14   15 00004EF0 _SmackOpen@12
+          9   16 00001730 _SmackSetSystemRes@4
+         15   17 00004EE0 _SmackSimulate@4
+         31   18 000032B0 _SmackSoundCheck@0
+         29   19 00003370 _SmackSoundInTrack@8
+         17   1A 00004C90 _SmackSoundOnOff@8
+         34   1B 00006B80 _SmackSoundUseDW@12
+         38   1C 00007480 _SmackSoundUseDirectSound@4
+         33   1D 00006430 _SmackSoundUseMSS@4
+         39   1E 000080C0 _SmackSoundUseWin@0
+         20   1F 00004380 _SmackSummary@8
+         23   20 00003AF0 _SmackToBuffer@28
+         28   21 000033E0 _SmackToBufferRect@8
+         22   22 00003D10 _SmackToScreen@24
+         30   23 000032D0 _SmackVolumePan@16
+         32   24 00003170 _SmackWait@4
+         36   25 00007EA0 _TimerFunc@20
+         35   26 000080A0 _donemarker@20
+
+  Summary
+
+        1000 .bss
+        1000 .edata
+        1000 .idata
+        2000 .reloc
+        E000 BEGTEXT
+        2000 DGROUP
