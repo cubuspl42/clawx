@@ -1,9 +1,9 @@
 #define DLL_NAME "USER32"
-#define PROXY_LOG
-#include <windows.h>
-#include "../proxy.h"
-#pragma pack(1)
 
+#include "../proxy.h"
+#include <windows.h>
+
+#pragma pack(1)
 
 HINSTANCE hLThis = 0;
 HINSTANCE hL = 0;
@@ -11,19 +11,12 @@ FARPROC p[1025] = { 0 };
 
 BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 {
-
-	proxy_log("DllMain", reason);
-
 	if (reason == DLL_PROCESS_ATTACH)
 	{
-		MessageBox(0, DLL_NAME, DLL_NAME, 0);
-
-		proxy_log("DllMain", "DLL_PROCESS_ATTACH");
+		proxy_log(DLL_NAME, "DLL_PROCESS_ATTACH");
 
 		hLThis = hInst;
 		hL = LoadLibrary("C:\\Windows\\System32\\USER32.DLL");
-
-		proxy_log("DllMain", "Loaded", DLL_NAME);
 
 		if (!hL) return false;
 
@@ -1055,11 +1048,22 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 
 	}
-	if (reason == DLL_PROCESS_DETACH)
+	else if (reason == DLL_PROCESS_DETACH)
 	{
+		proxy_log(DLL_NAME, "DLL_PROCESS_DETACH");
 		FreeLibrary(hL);
 	}
-
+	else if (reason == DLL_THREAD_ATTACH) {
+		// proxy_log(DLL_NAME, "DLL_THREAD_ATTACH");
+		++thread_number;
+		thread_index = thread_number;
+	}
+	else if (reason == DLL_THREAD_DETACH) {
+		// proxy_log(DLL_NAME, "DLL_THREAD_DETACH");
+	}
+	else {
+		proxy_log(DLL_NAME " ??? ", reason);
+	}
 	return 1;
 }
 

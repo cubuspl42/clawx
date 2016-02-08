@@ -13,19 +13,14 @@ FARPROC p[22] = { 0 };
 
 BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 {
-
-	//proxy_log("DllMain", reason);
-
 	if (reason == DLL_PROCESS_ATTACH)
 	{
-		MessageBox(0, DLL_NAME, DLL_NAME, 0);
+		MessageBox(0, "", "", 0);
 
-		proxy_log("DllMain", "DLL_PROCESS_ATTACH");
+		proxy_log(DLL_NAME, "DLL_PROCESS_ATTACH");
 
 		hLThis = hInst;
 		hL = LoadLibrary("C:\\Windows\\System32\\DDRAW.DLL");
-
-		proxy_log("DllMain", "Loaded", DLL_NAME);
 
 		if (!hL) return false;
 
@@ -53,21 +48,21 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 		p[21] = GetProcAddress(hL, "SetAppCompatData");
 
 	}
-	if (reason == DLL_PROCESS_DETACH)
+	else if (reason == DLL_PROCESS_DETACH)
 	{
-		proxy_log("DllMain", "DLL_PROCESS_DETACH");
+		proxy_log(DLL_NAME, "DLL_PROCESS_DETACH");
 		FreeLibrary(hL);
 	}
 	else if (reason == DLL_THREAD_ATTACH) {
-		proxy_log("DllMain", "DLL_THREAD_ATTACH");
+		// proxy_log(DLL_NAME, "DLL_THREAD_ATTACH");
 		++thread_number;
 		thread_index = thread_number;
 	}
 	else if (reason == DLL_THREAD_DETACH) {
-		proxy_log("DllMain", "DLL_THREAD_DETACH");
+		// proxy_log(DLL_NAME, "DLL_THREAD_DETACH");
 	}
 	else {
-		proxy_log("DllMain", reason);
+		proxy_log(DLL_NAME " ??? ", reason);
 	}
 
 	return 1;
@@ -75,15 +70,32 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 
 const unsigned MAGIC = 0x1a1b1c00;
 
-#define DDRAW_PALETTE_PROXY(method) proxy_log("IDirectDrawPalettePrx", #method);
+#define DDRAW_PALETTE_PROXY(method) proxy_log("DirectDrawPaletteProxy", #method);
 
-class IDirectDrawPalettePrx : public IDirectDrawPalette
+struct DirectDrawPaletteProxy : public IDirectDrawPalette
 {
-public:
+	static IDirectDrawPalette* unwrap(IDirectDrawPalette *ddp) {
+		if (!ddp) return nullptr;
+		DirectDrawPaletteProxy *ddpp = (DirectDrawPaletteProxy*)ddp;
+		if (ddpp->magic != MAGIC) {
+			proxy_log("!~~~~~~~ magic != MAGIC ~~~~~~~!");
+		}
+		return ddpp->ddp;
+	}
+
+	static IDirectDrawPalette* wrap(IDirectDrawPalette *ddp) {
+		if (!ddp) return nullptr;
+		DirectDrawPaletteProxy *ddpp = (DirectDrawPaletteProxy*)ddp;
+		if (ddpp->magic == MAGIC) {
+			proxy_log("!~~~~~~~ magic == MAGIC ~~~~~~~!");
+		}
+		return new DirectDrawPaletteProxy(ddp);
+	}
+
 	int magic = MAGIC;
 	IDirectDrawPalette *ddp;
 
-	IDirectDrawPalettePrx(IDirectDrawPalette *ddp) {
+	DirectDrawPaletteProxy(IDirectDrawPalette *ddp) {
 		this->ddp = ddp;
 	}
 
@@ -119,13 +131,13 @@ public:
 	}
 };
 
-#define DDRAW_SURFACE3_PROXY(method) proxy_log("IDirectDrawSurface3Prx", #method);
+#define DDRAW_SURFACE_PROXY(method) proxy_log("DirectDrawSurfaceProxy", #method);
 
-class IDirectDrawSurface3Prx : public IDirectDrawSurface3
+class DirectDrawSurfaceProxy : public IDirectDrawSurface3
 {
 	static IDirectDrawSurface3* unwrap(IDirectDrawSurface3 *dds3) {
 		if (!dds3) return nullptr;
-		IDirectDrawSurface3Prx *dds3p = (IDirectDrawSurface3Prx*)dds3;
+		DirectDrawSurfaceProxy *dds3p = (DirectDrawSurfaceProxy*)dds3;
 		if (dds3p->magic != MAGIC) {
 			proxy_log("!~~~~~~~ magic != MAGIC ~~~~~~~!");
 		}
@@ -134,50 +146,57 @@ class IDirectDrawSurface3Prx : public IDirectDrawSurface3
 
 	static IDirectDrawSurface3* wrap(IDirectDrawSurface3 *dds3) {
 		if (!dds3) return nullptr;
-		IDirectDrawSurface3Prx *dds3p = (IDirectDrawSurface3Prx*)dds3;
+		DirectDrawSurfaceProxy *dds3p = (DirectDrawSurfaceProxy*)dds3;
 		if (dds3p->magic == MAGIC) {
 			proxy_log("!~~~~~~~ magic == MAGIC ~~~~~~~!");
 		}
-		return new IDirectDrawSurface3Prx(dds3);
+		return new DirectDrawSurfaceProxy(dds3);
 	}
 public:
 	int magic = MAGIC;
+	IDirectDrawSurface *dds1 = nullptr;
 	IDirectDrawSurface3 *dds3 = nullptr;
 
-	IDirectDrawSurface3Prx(IDirectDrawSurface3 *dds) {
-		this->dds3 = dds;
+	DirectDrawSurfaceProxy(IDirectDrawSurface *dds1) {
+		this->dds1 = dds1;
+	}
+
+	DirectDrawSurfaceProxy(IDirectDrawSurface3 *dds3) {
+		this->dds3 = dds3;
 	}
 
 	/*** IUnknown methods ***/
 	STDMETHOD(QueryInterface) (THIS_ REFIID riid, LPVOID FAR * ppvObj) {
-		DDRAW_SURFACE3_PROXY(QueryInterface);
+		DDRAW_SURFACE_PROXY(QueryInterface);
 		proxy_log("this = ", this);
 
-		proxy_log(riid.Data1);
+		// proxy_log(riid.Data1);
 
-		*((IDirectDrawSurface3**)ppvObj) = this;
+		auto result = dds1->QueryInterface(riid, (void**)&dds3);
+
+		*ppvObj = this;
 
 		return S_OK;
 	}
 	STDMETHOD_(ULONG, AddRef) (THIS) {
-		DDRAW_SURFACE3_PROXY(AddRef);
+		DDRAW_SURFACE_PROXY(AddRef);
 		return dds3->AddRef();
 	}
 	STDMETHOD_(ULONG, Release) (THIS) {
-		DDRAW_SURFACE3_PROXY(Release);
+		DDRAW_SURFACE_PROXY(Release);
 		return dds3->Release();
 	}
 	/*** IDirectDrawSurface methods ***/
 	STDMETHOD(AddAttachedSurface)(THIS_ LPDIRECTDRAWSURFACE3) {
-		DDRAW_SURFACE3_PROXY(AddAttachedSurface);
+		DDRAW_SURFACE_PROXY(AddAttachedSurface);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(AddOverlayDirtyRect)(THIS_ LPRECT) {
-		DDRAW_SURFACE3_PROXY(AddOverlayDirtyRect);
+		DDRAW_SURFACE_PROXY(AddOverlayDirtyRect);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(Blt)(THIS_ LPRECT a, LPDIRECTDRAWSURFACE3 b, LPRECT c, DWORD d, LPDDBLTFX e) {
-		DDRAW_SURFACE3_PROXY(Blt);
+		DDRAW_SURFACE_PROXY(Blt);
 		proxy_log("this =", this);
 		proxy_log("bdds3 =", c);
 		STACK_PUSH(Blt);
@@ -186,51 +205,44 @@ public:
 		return result;
 	}
 	STDMETHOD(BltBatch)(THIS_ LPDDBLTBATCH, DWORD, DWORD) {
-		DDRAW_SURFACE3_PROXY(BltBatch);
+		DDRAW_SURFACE_PROXY(BltBatch);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(BltFast)(THIS_ DWORD a, DWORD b, LPDIRECTDRAWSURFACE3 c, LPRECT d, DWORD e) {
-		DDRAW_SURFACE3_PROXY(BltFast);
+		DDRAW_SURFACE_PROXY(BltFast);
 		proxy_log("this = ", this);
 		proxy_log("bdds3 = ", c);
 		STACK_PUSH(BltFast);
-		IDirectDrawSurface3Prx *ddsp = (IDirectDrawSurface3Prx*)c;
+		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy*)c;
 		auto result = dds3->BltFast(a, b, unwrap(c), d, e);
 		STACK_POP(BltFast);
 		return result;
 	}
 
 	STDMETHOD(DeleteAttachedSurface)(THIS_ DWORD, LPDIRECTDRAWSURFACE3) {
-		DDRAW_SURFACE3_PROXY(DeleteAttachedSurface);
+		DDRAW_SURFACE_PROXY(DeleteAttachedSurface);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(EnumAttachedSurfaces)(THIS_ LPVOID, LPDDENUMSURFACESCALLBACK) {
-		DDRAW_SURFACE3_PROXY(EnumAttachedSurfaces);
+		DDRAW_SURFACE_PROXY(EnumAttachedSurfaces);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(EnumOverlayZOrders)(THIS_ DWORD, LPVOID, LPDDENUMSURFACESCALLBACK) {
-		DDRAW_SURFACE3_PROXY(EnumOverlayZOrders);
+		DDRAW_SURFACE_PROXY(EnumOverlayZOrders);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(Flip)(THIS_ LPDIRECTDRAWSURFACE3 a, DWORD b) {
-		DDRAW_SURFACE3_PROXY(Flip);
+		DDRAW_SURFACE_PROXY(Flip);
 		STACK_PUSH(Flip);
 		proxy_log("this = ", this);
 		proxy_log("fdds3 = ", a);
-		IDirectDrawSurface3Prx *ddsp = (IDirectDrawSurface3Prx*)a;
+		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy*)a;
 		auto result = dds3->Flip(unwrap(a), b);
 		STACK_POP(Flip);
 		return result;
 	}
 	STDMETHOD(GetAttachedSurface)(THIS_ LPDDSCAPS a, LPDIRECTDRAWSURFACE3 FAR *b) {
-#if 0
-		DDRAW_SURFACE3_PROXY(GetAttachedSurface);
-		LPDIRECTDRAWSURFACE3 adds3;
-		auto result = dds3->GetAttachedSurface(a, &adds3);
-		proxy_log("adds3 =", adds3);
-		*b = adds3;
-		return result;
-#else
+		DDRAW_SURFACE_PROXY(GetAttachedSurface);
 		proxy_log("this = ", this);
 		STACK_PUSH(GetAttachedSurface);
 		LPDIRECTDRAWSURFACE3 adds3;
@@ -238,42 +250,41 @@ public:
 		*b = wrap(adds3);
 		STACK_POP(GetAttachedSurface);
 		return result;
-#endif
 	}
 	STDMETHOD(GetBltStatus)(THIS_ DWORD) {
-		DDRAW_SURFACE3_PROXY(GetBltStatus);
+		DDRAW_SURFACE_PROXY(GetBltStatus);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(GetCaps)(THIS_ LPDDSCAPS) {
-		DDRAW_SURFACE3_PROXY(GetCaps);
+		DDRAW_SURFACE_PROXY(GetCaps);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(GetClipper)(THIS_ LPDIRECTDRAWCLIPPER FAR*) {
-		DDRAW_SURFACE3_PROXY(GetClipper);
+		DDRAW_SURFACE_PROXY(GetClipper);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(GetColorKey)(THIS_ DWORD, LPDDCOLORKEY) {
-		DDRAW_SURFACE3_PROXY(GetColorKey);
+		DDRAW_SURFACE_PROXY(GetColorKey);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(GetDC)(THIS_ HDC FAR *a) {
-		DDRAW_SURFACE3_PROXY(GetDC);
+		DDRAW_SURFACE_PROXY(GetDC);
 		return dds3->GetDC(a);
 	}
 	STDMETHOD(GetFlipStatus)(THIS_ DWORD) {
-		DDRAW_SURFACE3_PROXY(GetFlipStatus);
+		DDRAW_SURFACE_PROXY(GetFlipStatus);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(GetOverlayPosition)(THIS_ LPLONG, LPLONG) {
-		DDRAW_SURFACE3_PROXY(GetOverlayPosition);
+		DDRAW_SURFACE_PROXY(GetOverlayPosition);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(GetPalette)(THIS_ LPDIRECTDRAWPALETTE FAR*) {
-		DDRAW_SURFACE3_PROXY(GetPalette);
+		DDRAW_SURFACE_PROXY(GetPalette);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(GetPixelFormat)(THIS_ LPDDPIXELFORMAT a) {
-		DDRAW_SURFACE3_PROXY(GetPixelFormat);
+		DDRAW_SURFACE_PROXY(GetPixelFormat);
 		STACK_PUSH(GetPixelFormat);
 		proxy_log("this = ", this);
 		auto result = dds3->GetPixelFormat(a);
@@ -281,7 +292,7 @@ public:
 		return result;
 	}
 	STDMETHOD(GetSurfaceDesc)(THIS_ LPDDSURFACEDESC a) {
-		DDRAW_SURFACE3_PROXY(GetSurfaceDesc);
+		DDRAW_SURFACE_PROXY(GetSurfaceDesc);
 		proxy_log("this = ", this);
 		STACK_PUSH(GetSurfaceDesc);
 		auto result = dds3->GetSurfaceDesc(a);
@@ -289,15 +300,15 @@ public:
 		return result;
 	}
 	STDMETHOD(Initialize)(THIS_ LPDIRECTDRAW, LPDDSURFACEDESC) {
-		DDRAW_SURFACE3_PROXY(Initialize);
+		DDRAW_SURFACE_PROXY(Initialize);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(IsLost)(THIS) {
-		DDRAW_SURFACE3_PROXY(IsLost);
+		DDRAW_SURFACE_PROXY(IsLost);
 		return dds3->IsLost();
 	}
 	STDMETHOD(Lock)(THIS_ LPRECT a, LPDDSURFACEDESC b, DWORD c, HANDLE d) {
-		DDRAW_SURFACE3_PROXY(Lock);
+		DDRAW_SURFACE_PROXY(Lock);
 		proxy_log("this = ", this);
 		STACK_PUSH(Lock);
 		auto result = dds3->Lock(a, b, c, d);
@@ -305,36 +316,36 @@ public:
 		return result;
 	}
 	STDMETHOD(ReleaseDC)(THIS_ HDC a) {
-		DDRAW_SURFACE3_PROXY(ReleaseDC);
+		DDRAW_SURFACE_PROXY(ReleaseDC);
 		return dds3->ReleaseDC(a);
 	}
 	STDMETHOD(Restore)(THIS) {
-		DDRAW_SURFACE3_PROXY(Restore);
+		DDRAW_SURFACE_PROXY(Restore);
 		return dds3->Restore();
 	}
 	STDMETHOD(SetClipper)(THIS_ LPDIRECTDRAWCLIPPER) {
-		DDRAW_SURFACE3_PROXY(SetClipper);
+		DDRAW_SURFACE_PROXY(SetClipper);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(SetColorKey)(THIS_ DWORD a, LPDDCOLORKEY b) {
-		DDRAW_SURFACE3_PROXY(SetColorKey);
+		DDRAW_SURFACE_PROXY(SetColorKey);
 		return dds3->SetColorKey(a, b);
 	}
 	STDMETHOD(SetOverlayPosition)(THIS_ LONG, LONG) {
-		DDRAW_SURFACE3_PROXY(SetOverlayPosition);
+		DDRAW_SURFACE_PROXY(SetOverlayPosition);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(SetPalette)(THIS_ LPDIRECTDRAWPALETTE a) {
-		DDRAW_SURFACE3_PROXY(SetPalette);
+		DDRAW_SURFACE_PROXY(SetPalette);
 		proxy_log("this = ", this);
 		STACK_PUSH(SetPalette);
-		IDirectDrawPalettePrx *ddpp = (IDirectDrawPalettePrx*)a;
-		auto result = dds3->SetPalette(ddpp->magic == MAGIC ? ddpp->ddp : a);
+		DirectDrawPaletteProxy *ddpp = (DirectDrawPaletteProxy*)a;
+		auto result = dds3->SetPalette(DirectDrawPaletteProxy::unwrap(a));
 		STACK_POP(SetPalette);
 		return result;
 	}
 	STDMETHOD(Unlock)(THIS_ LPVOID a) {
-		DDRAW_SURFACE3_PROXY(Unlock);
+		DDRAW_SURFACE_PROXY(Unlock);
 		proxy_log("this = ", this);
 		STACK_PUSH(Unlock);
 		auto result = dds3->Unlock(a);
@@ -342,295 +353,88 @@ public:
 		return result;
 	}
 	STDMETHOD(UpdateOverlay)(THIS_ LPRECT, LPDIRECTDRAWSURFACE3, LPRECT, DWORD, LPDDOVERLAYFX) {
-		DDRAW_SURFACE3_PROXY(UpdateOverlay);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(UpdateOverlayDisplay)(THIS_ DWORD) {
-		DDRAW_SURFACE3_PROXY(UpdateOverlayDisplay);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(UpdateOverlayZOrder)(THIS_ DWORD, LPDIRECTDRAWSURFACE3) {
-		DDRAW_SURFACE3_PROXY(UpdateOverlayZOrder);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetDDInterface)(THIS_ LPVOID FAR *) {
-		DDRAW_SURFACE3_PROXY(GetDDInterface);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(PageLock)(THIS_ DWORD) {
-		DDRAW_SURFACE3_PROXY(PageLock);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(PageUnlock)(THIS_ DWORD) {
-		DDRAW_SURFACE3_PROXY(PageUnlock);
-		return PROXY_UNIMPLEMENTED();
-	}
-	/*** Added in the V3 interface ***/
-	STDMETHOD(SetSurfaceDesc)(THIS_ LPDDSURFACEDESC a, DWORD b) {
-		DDRAW_SURFACE3_PROXY(SetSurfaceDesc);
-		return PROXY_UNIMPLEMENTED();
-	}
-};
-
-#define DDRAW_SURFACE_PROXY(method) proxy_log("IDirectDrawSurfacePrx", #method);
-
-struct IDirectDrawSurfacePrx : public IDirectDrawSurface
-{
-	int magic = MAGIC;
-	IDirectDrawSurface *dds1;
-
-	IDirectDrawSurfacePrx(IDirectDrawSurface *dds) {
-		this->dds1 = dds;
-	}
-
-	/*** IUnknown methods ***/
-	STDMETHOD(QueryInterface) (THIS_ REFIID riid, LPVOID FAR * ppvObj) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(QueryInterface);
-
-		proxy_log("this =", this);
-		proxy_log("this->dds1 =", dds1);
-
-		proxy_log(std::hex, riid.Data1);
-
-		IDirectDrawSurface3 *dds3 = nullptr;
-		auto result = dds1->QueryInterface(riid, (void**)&dds3);
-
-		proxy_log("dds3 =", dds3);
-
-		IDirectDrawSurface3Prx *dds3p = new IDirectDrawSurface3Prx(dds3);
-
-		proxy_log("dds3p =", dds3p);
-
-		*((IDirectDrawSurface3**)ppvObj) = dds3p;
-		return result;
-	}
-	STDMETHOD_(ULONG, AddRef) (THIS) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(AddRef);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD_(ULONG, Release) (THIS) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(Release);
-		return dds1->Release();
-	}
-	/*** IDirectDrawSurface methods ***/
-	STDMETHOD(AddAttachedSurface)(THIS_ LPDIRECTDRAWSURFACE) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(AddAttachedSurface);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(AddOverlayDirtyRect)(THIS_ LPRECT) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(AddOverlayDirtyRect);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(Blt)(THIS_ LPRECT, LPDIRECTDRAWSURFACE, LPRECT, DWORD, LPDDBLTFX) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(Blt);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(BltBatch)(THIS_ LPDDBLTBATCH, DWORD, DWORD) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(BltBatch);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(BltFast)(THIS_ DWORD, DWORD, LPDIRECTDRAWSURFACE, LPRECT, DWORD) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(BltFast);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(DeleteAttachedSurface)(THIS_ DWORD, LPDIRECTDRAWSURFACE) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(DeleteAttachedSurface);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(EnumAttachedSurfaces)(THIS_ LPVOID, LPDDENUMSURFACESCALLBACK) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(EnumAttachedSurfaces);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(EnumOverlayZOrders)(THIS_ DWORD, LPVOID, LPDDENUMSURFACESCALLBACK) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(EnumOverlayZOrders);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(Flip)(THIS_ LPDIRECTDRAWSURFACE a, DWORD b) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(Flip);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetAttachedSurface)(THIS_ LPDDSCAPS, LPDIRECTDRAWSURFACE FAR *) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(GetAttachedSurface);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetBltStatus)(THIS_ DWORD) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(GetBltStatus);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetCaps)(THIS_ LPDDSCAPS) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(GetCaps);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetClipper)(THIS_ LPDIRECTDRAWCLIPPER FAR*) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(GetClipper);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetColorKey)(THIS_ DWORD, LPDDCOLORKEY) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(GetColorKey);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetDC)(THIS_ HDC FAR *) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(GetDC);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetFlipStatus)(THIS_ DWORD) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(GetFlipStatus);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetOverlayPosition)(THIS_ LPLONG, LPLONG) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(GetOverlayPosition);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetPalette)(THIS_ LPDIRECTDRAWPALETTE FAR*) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(GetPalette);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetPixelFormat)(THIS_ LPDDPIXELFORMAT) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(GetPixelFormat);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetSurfaceDesc)(THIS_ LPDDSURFACEDESC) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(GetSurfaceDesc);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(Initialize)(THIS_ LPDIRECTDRAW, LPDDSURFACEDESC) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(Initialize);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(IsLost)(THIS) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(IsLost);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(Lock)(THIS_ LPRECT, LPDDSURFACEDESC, DWORD, HANDLE) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(Lock);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(ReleaseDC)(THIS_ HDC) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(ReleaseDC);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(Restore)(THIS) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(Restore);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(SetClipper)(THIS_ LPDIRECTDRAWCLIPPER) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(SetClipper);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(SetColorKey)(THIS_ DWORD, LPDDCOLORKEY) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(SetColorKey);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(SetOverlayPosition)(THIS_ LONG, LONG) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(SetOverlayPosition);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(SetPalette)(THIS_ LPDIRECTDRAWPALETTE a) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(SetPalette);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(Unlock)(THIS_ LPVOID) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
-		DDRAW_SURFACE_PROXY(Unlock);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(UpdateOverlay)(THIS_ LPRECT, LPDIRECTDRAWSURFACE, LPRECT, DWORD, LPDDOVERLAYFX) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
 		DDRAW_SURFACE_PROXY(UpdateOverlay);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(UpdateOverlayDisplay)(THIS_ DWORD) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
 		DDRAW_SURFACE_PROXY(UpdateOverlayDisplay);
 		return PROXY_UNIMPLEMENTED();
 	}
-	STDMETHOD(UpdateOverlayZOrder)(THIS_ DWORD, LPDIRECTDRAWSURFACE) {
-		/* ~~~~~~~~ IDirectDrawSurface ~~~~~~~~ */
+	STDMETHOD(UpdateOverlayZOrder)(THIS_ DWORD, LPDIRECTDRAWSURFACE3) {
 		DDRAW_SURFACE_PROXY(UpdateOverlayZOrder);
+		return PROXY_UNIMPLEMENTED();
+	}
+	STDMETHOD(GetDDInterface)(THIS_ LPVOID FAR *) {
+		DDRAW_SURFACE_PROXY(GetDDInterface);
+		return PROXY_UNIMPLEMENTED();
+	}
+	STDMETHOD(PageLock)(THIS_ DWORD) {
+		DDRAW_SURFACE_PROXY(PageLock);
+		return PROXY_UNIMPLEMENTED();
+	}
+	STDMETHOD(PageUnlock)(THIS_ DWORD) {
+		DDRAW_SURFACE_PROXY(PageUnlock);
+		return PROXY_UNIMPLEMENTED();
+	}
+	/*** Added in the V3 interface ***/
+	STDMETHOD(SetSurfaceDesc)(THIS_ LPDDSURFACEDESC a, DWORD b) {
+		DDRAW_SURFACE_PROXY(SetSurfaceDesc);
 		return PROXY_UNIMPLEMENTED();
 	}
 };
 
-#define DDRAW2_PROXY(method) proxy_log("IDirectDraw2Prx", #method);
+#define DDRAW_PROXY(method) proxy_log("DirectDrawProxy", #method);
 
-IDirectDraw2 *dd2;
+IDirectDraw *dd = nullptr;
+IDirectDraw2 *dd2 = nullptr;
 
-class IDirectDraw2Prx : public IDirectDraw2
+class DirectDrawProxy : public IDirectDraw2
 {
 public:
 	/*** IUnknown methods ***/
 	STDMETHOD(QueryInterface) (THIS_ REFIID riid, LPVOID FAR * ppvObj) {
-		DDRAW2_PROXY(QueryInterface);
+		DDRAW_PROXY(QueryInterface);
 
 		proxy_log("this =", this);
 		proxy_log(std::hex, riid.Data1, riid.Data2, riid.Data3);
 
-		return dd2->QueryInterface(riid, ppvObj);
+		auto result = dd->QueryInterface(riid, (void**)(&dd2));
+
+		*ppvObj = this;
+
+		return result;
 	}
 	STDMETHOD_(ULONG, AddRef) (THIS) {
-		DDRAW2_PROXY(AddRef);
+		DDRAW_PROXY(AddRef);
 		return dd2->AddRef();
 	}
 	STDMETHOD_(ULONG, Release) (THIS) {
-		DDRAW2_PROXY(Release);
+		DDRAW_PROXY(Release);
 		return dd2->Release();
 	}
 	/*** IDirectDraw methods ***/
 	STDMETHOD(Compact)(THIS) {
-		DDRAW2_PROXY(Compact);
+		DDRAW_PROXY(Compact);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(CreateClipper)(THIS_ DWORD a, LPDIRECTDRAWCLIPPER FAR* b, IUnknown FAR *c) {
-		DDRAW2_PROXY(CreateClipper);
+		DDRAW_PROXY(CreateClipper);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(CreatePalette)(THIS_ DWORD a, LPPALETTEENTRY b, LPDIRECTDRAWPALETTE FAR* c, IUnknown FAR *d) {
-		DDRAW2_PROXY(CreatePalette);
-		return dd2->CreatePalette(a, b, c, d);
-		// --------------------------
+		DDRAW_PROXY(CreatePalette);
 		LPDIRECTDRAWPALETTE ddp;
 		auto result = dd2->CreatePalette(a, b, &ddp, d);
-		*c = new IDirectDrawPalettePrx(ddp);
+		*c = new DirectDrawPaletteProxy(ddp);
 		return result;
 	}
 	STDMETHOD(CreateSurface)(THIS_  LPDDSURFACEDESC a, LPDIRECTDRAWSURFACE FAR *b, IUnknown FAR *c) {
-		DDRAW2_PROXY(CreateSurface);
+		DDRAW_PROXY(CreateSurface);
 
 		IDirectDrawSurface *dds = nullptr;
 		auto result = dd2->CreateSurface(a, &dds, c);
-		IDirectDrawSurfacePrx *ddsp = new IDirectDrawSurfacePrx(dds);
+
+		DirectDrawSurfaceProxy *ddsp = new DirectDrawSurfaceProxy(dds);
 
 		proxy_log("dds =", dds);
 		proxy_log("ddsp =", ddsp);
@@ -641,55 +445,55 @@ public:
 		return result;
 	}
 	STDMETHOD(DuplicateSurface)(THIS_ LPDIRECTDRAWSURFACE a, LPDIRECTDRAWSURFACE FAR *b) {
-		DDRAW2_PROXY(DuplicateSurface);
+		DDRAW_PROXY(DuplicateSurface);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(EnumDisplayModes)(THIS_ DWORD a, LPDDSURFACEDESC b, LPVOID c, LPDDENUMMODESCALLBACK d) {
-		DDRAW2_PROXY(EnumDisplayModes);
+		DDRAW_PROXY(EnumDisplayModes);
 		return dd2->EnumDisplayModes(a, b, c, d);
 	}
 	STDMETHOD(EnumSurfaces)(THIS_ DWORD, LPDDSURFACEDESC, LPVOID, LPDDENUMSURFACESCALLBACK) {
-		DDRAW2_PROXY(EnumSurfaces);
+		DDRAW_PROXY(EnumSurfaces);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(FlipToGDISurface)(THIS) {
-		DDRAW2_PROXY(FlipToGDISurface);
+		DDRAW_PROXY(FlipToGDISurface);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(GetCaps)(THIS_ LPDDCAPS a, LPDDCAPS b) {
-		DDRAW2_PROXY(GetCaps);
+		DDRAW_PROXY(GetCaps);
 		return dd2->GetCaps(a, b);
 	}
 	STDMETHOD(GetDisplayMode)(THIS_ LPDDSURFACEDESC a) {
-		DDRAW2_PROXY(GetDisplayMode);
+		DDRAW_PROXY(GetDisplayMode);
 		return dd2->GetDisplayMode(a);
 	}
 	STDMETHOD(GetFourCCCodes)(THIS_  LPDWORD, LPDWORD) {
-		DDRAW2_PROXY(GetFourCCCodes);
+		DDRAW_PROXY(GetFourCCCodes);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(GetGDISurface)(THIS_ LPDIRECTDRAWSURFACE FAR *) {
-		DDRAW2_PROXY(GetGDISurface);
+		DDRAW_PROXY(GetGDISurface);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(GetMonitorFrequency)(THIS_ LPDWORD) {
-		DDRAW2_PROXY(GetMonitorFrequency);
+		DDRAW_PROXY(GetMonitorFrequency);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(GetScanLine)(THIS_ LPDWORD) {
-		DDRAW2_PROXY(GetScanLine);
+		DDRAW_PROXY(GetScanLine);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(GetVerticalBlankStatus)(THIS_ LPBOOL) {
-		DDRAW2_PROXY(GetVerticalBlankStatus);
+		DDRAW_PROXY(GetVerticalBlankStatus);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(Initialize)(THIS_ GUID FAR *) {
-		DDRAW2_PROXY(Initialize);
+		DDRAW_PROXY(Initialize);
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(RestoreDisplayMode)(THIS) {
-		DDRAW2_PROXY(RestoreDisplayMode);
+		DDRAW_PROXY(RestoreDisplayMode);
 		return dd2->RestoreDisplayMode();
 	}
 
@@ -716,155 +520,23 @@ public:
 #define DDSCL_NORMAL                            0x00000008l
 
 	STDMETHOD(SetCooperativeLevel)(THIS_ HWND a, DWORD b) {
-		DDRAW2_PROXY(SetCooperativeLevel);
+		DDRAW_PROXY(SetCooperativeLevel);
 		return dd2->SetCooperativeLevel(a, b);
 	}
 	STDMETHOD(SetDisplayMode)(THIS_ DWORD a, DWORD b, DWORD c, DWORD d, DWORD e) {
-		DDRAW2_PROXY(SetDisplayMode);
+		DDRAW_PROXY(SetDisplayMode);
 		return dd2->SetDisplayMode(a, b, c, d, e);
 	}
 	STDMETHOD(WaitForVerticalBlank)(THIS_ DWORD a, HANDLE b) {
-		DDRAW2_PROXY(WaitForVerticalBlank);
+		DDRAW_PROXY(WaitForVerticalBlank);
 		return dd2->WaitForVerticalBlank(a, b);
 	}
 	/*** Added in the v2 interface ***/
 	STDMETHOD(GetAvailableVidMem)(THIS_ LPDDSCAPS, LPDWORD, LPDWORD) {
-		DDRAW2_PROXY(GetAvailableVidMem);
+		DDRAW_PROXY(GetAvailableVidMem);
 		return PROXY_UNIMPLEMENTED();
 	};
 };
-
-#define DDRAW_PROXY(method) proxy_log("IDirectDrawPrx", #method);
-
-IDirectDraw *dd = nullptr;
-
-struct IDirectDrawPrx : IDirectDraw
-{
-	/*** IUnknown methods ***/
-	STDMETHOD(QueryInterface) (THIS_ REFIID riid, LPVOID FAR * ppvObj) {
-		DDRAW_PROXY(QueryInterface);
-
-		proxy_log("this =", this);
-		proxy_log(std::hex, riid.Data1, riid.Data2, riid.Data3);
-
-		auto result = dd->QueryInterface(riid, (void**)(&dd2));
-		*((IDirectDraw2**)ppvObj) = new IDirectDraw2Prx();
-		return result;
-	}
-	STDMETHOD_(ULONG, AddRef) (THIS) {
-		DDRAW_PROXY(AddRef);
-		return dd->AddRef();
-	}
-	STDMETHOD_(ULONG, Release) (THIS) {
-		DDRAW_PROXY(Release);
-		return dd->Release();
-	}
-	/*** IDirectDraw methods ***/
-	STDMETHOD(Compact)(THIS) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(Compact);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(CreateClipper)(THIS_ DWORD a, LPDIRECTDRAWCLIPPER FAR* b, IUnknown FAR *c) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(CreateClipper);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(CreatePalette)(THIS_ DWORD, LPPALETTEENTRY a, LPDIRECTDRAWPALETTE FAR* b, IUnknown FAR *c) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(CreatePalette);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(CreateSurface)(THIS_  LPDDSURFACEDESC a, LPDIRECTDRAWSURFACE FAR *b, IUnknown FAR *c) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(CreateSurface);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(DuplicateSurface)(THIS_ LPDIRECTDRAWSURFACE a, LPDIRECTDRAWSURFACE FAR *b) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(DuplicateSurface);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(EnumDisplayModes)(THIS_ DWORD, LPDDSURFACEDESC a, LPVOID b, LPDDENUMMODESCALLBACK c) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(EnumDisplayModes);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(EnumSurfaces)(THIS_ DWORD, LPDDSURFACEDESC, LPVOID, LPDDENUMSURFACESCALLBACK) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(EnumSurfaces);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(FlipToGDISurface)(THIS) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(FlipToGDISurface);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetCaps)(THIS_ LPDDCAPS a, LPDDCAPS b) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(GetCaps);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetDisplayMode)(THIS_ LPDDSURFACEDESC a) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(GetDisplayMode);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetFourCCCodes)(THIS_  LPDWORD, LPDWORD) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(GetFourCCCodes);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetGDISurface)(THIS_ LPDIRECTDRAWSURFACE FAR *) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(GetGDISurface);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetMonitorFrequency)(THIS_ LPDWORD) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(GetMonitorFrequency);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetScanLine)(THIS_ LPDWORD) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(GetScanLine);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(GetVerticalBlankStatus)(THIS_ LPBOOL) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(GetVerticalBlankStatus);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(Initialize)(THIS_ GUID FAR *) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(Initialize);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(RestoreDisplayMode)(THIS) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(RestoreDisplayMode);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(SetCooperativeLevel)(THIS_ HWND, DWORD) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(SetCooperativeLevel);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(SetDisplayMode)(THIS_ DWORD, DWORD, DWORD) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(SetDisplayMode);
-		return PROXY_UNIMPLEMENTED();
-	}
-	STDMETHOD(WaitForVerticalBlank)(THIS_ DWORD, HANDLE) {
-		/* ~~~~~~~~ IDirectDraw ~~~~~~~~ */
-		DDRAW_PROXY(WaitForVerticalBlank);
-		return PROXY_UNIMPLEMENTED();
-	}
-};
-
-#if 1
-
-HRESULT result;
 
 // DirectDrawCreate
 extern "C" HRESULT WINAPI __E__7__(
@@ -879,35 +551,16 @@ extern "C" HRESULT WINAPI __E__7__(
 		LPDIRECTDRAW *lplpDD,
 		IUnknown     *pUnkOuter
 	);
-	F f = (F)p[7];
 
-	// HRESULT result = f(lpGUID, lplpDD, pUnkOuter);
-	HRESULT result = f(lpGUID, &dd, pUnkOuter);
+	F _DirectDrawCreate = (F)p[7];
 
-	IDirectDraw *ddp = new IDirectDrawPrx();
+	HRESULT result = _DirectDrawCreate(lpGUID, &dd, pUnkOuter);
+
+	IDirectDraw *ddp = (IDirectDraw *)new DirectDrawProxy();
 	*lplpDD = ddp;
 
 	return result;
 }
-
-#else
-
-// DirectDrawCreate
-extern "C" __declspec(naked) HRESULT __stdcall __E__7__(
-	_In_  GUID FAR         *lpGUID,
-	_Out_ LPDIRECTDRAW FAR *lplpDD,
-	_In_  IUnknown FAR     *pUnkOuter
-	)
-{
-
-	PROXY(DirectDrawCreate)
-		__asm
-	{
-		jmp p[7 * 4];
-	}
-}
-
-#endif
 
 // AcquireDDThreadLock
 extern "C" __declspec(naked) void __stdcall __E__0__()
