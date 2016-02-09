@@ -1,6 +1,6 @@
 #define DLL_NAME "USER32"
 
-#include "../proxy.h"
+#include "../proxy/proxy.h"
 #include <windows.h>
 
 #pragma pack(1)
@@ -2188,13 +2188,33 @@ extern "C" __declspec(naked) void __stdcall __E__111__()
 }
 
 // CreateWindowExA
-extern "C" __declspec(naked) void __stdcall __E__112__()
-{
-	PROXY(CreateWindowExA)
-		__asm
-	{
-		jmp p[112 * 4];
-	}
+extern "C" HWND WINAPI __E__112__(
+	_In_     DWORD     dwExStyle, // WS_EX_APPWINDOW | WS_EX_TOPMOST
+	_In_opt_ LPCTSTR   lpClassName,
+	_In_opt_ LPCTSTR   lpWindowName,
+	_In_     DWORD     dwStyle, // WS_SYSMENU | WS_POPUP 
+	_In_     int       x,
+	_In_     int       y,
+	_In_     int       nWidth,
+	_In_     int       nHeight,
+	_In_opt_ HWND      hWndParent,
+	_In_opt_ HMENU     hMenu,
+	_In_opt_ HINSTANCE hInstance,
+	_In_opt_ LPVOID    lpParam
+) {
+	PROXY(CreateWindowExA);
+
+	typedef decltype(&__E__112__) F;
+
+	F _CreateWindowExA = (F)p[112];
+
+	dwExStyle = 0;
+	dwStyle = 0;
+	nWidth = 640, nHeight = 480;
+
+	auto result = _CreateWindowExA(dwExStyle, lpClassName, lpWindowName, dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+
+	return result;
 }
 
 // CreateWindowExW

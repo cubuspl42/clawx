@@ -1,6 +1,6 @@
 #define DLL_NAME "SMACKW32"
 
-#include "../proxy.h"
+#include "../proxy/proxy.h"
 #include <windows.h>
 
 #pragma pack(1)

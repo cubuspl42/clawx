@@ -1,5 +1,8 @@
 #pragma once
 
+#include <windows.h>
+#include <ddraw.h>
+
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -7,6 +10,16 @@
 #include <ctime>
 #include <stack>
 #include <vector>
+
+#ifdef PROXY_EXPORTS
+#define PROXY_EXPORTS __declspec(dllexport)
+#else
+#define PROXY_EXPORTS __declspec(dllimport)
+#endif
+
+PROXY_EXPORTS IDirectDraw *DirectDrawProxyCreate(IDirectDraw *);
+
+PROXY_EXPORTS void *ProxyLog();
 
 unsigned short thread_number;
 thread_local unsigned short thread_index;
@@ -50,25 +63,14 @@ void log(std::ofstream &os, Args&&... args) {
 
 #define DLL_NAME_STR(name) #name
 
-bool enable_proxy_log = false;
+bool enable_proxy_log = true;
 
-std::ofstream proxy_log_file;
 std::ofstream stack_log_file;
-
-int proxy_init() {
-	std::string cfg = read_file("config.txt");
-	enable_proxy_log = contains(cfg, DLL_NAME);
-	proxy_log_file.open(DLL_NAME "_log.txt");
-	stack_log_file.open(DLL_NAME "_stack_log.txt");
-	proxy_log_file.rdbuf()->pubsetbuf(0, 0);
-	stack_log_file.rdbuf()->pubsetbuf(0, 0);
-	return 0;
-}
 
 template<typename... Args>
 void proxy_log(Args&&... args) {
 	if (enable_proxy_log) {
-		log(proxy_log_file, std::forward<Args>(args)...);
+		log(*((std::ofstream*)ProxyLog()), std::forward<Args>(args)...);
 	}
 }
 
@@ -79,8 +81,6 @@ void proxy_log_symbol(const char *category, const char *symbol) {
 void proxy_log_unimplemented() {
 	proxy_log_symbol(DLL_NAME, "<unimplemented>");
 }
-
-int _ = proxy_init();
 
 #define PROXY(symbol) proxy_log_symbol(DLL_NAME, #symbol);
 
