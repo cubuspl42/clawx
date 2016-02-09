@@ -3208,7 +3208,7 @@ extern "C" __declspec(naked) void __stdcall __E__211__()
 }
 
 // DrawTextA
-extern "C" int __E__212__(
+extern "C" int WINAPI __E__212__(
 	_In_    HDC     hDC,
 	_Inout_ LPCTSTR lpchText,
 	_In_    int     nCount,
@@ -3216,7 +3216,7 @@ extern "C" int __E__212__(
 	_In_    UINT    uFormat
 ){
 	PROXY(DrawTextA)
-		return 1;
+		return 16;
 }
 
 // DrawTextExA

@@ -8775,7 +8775,7 @@ extern "C" int __E__784__( // !!!
 }
 
 // SetBkMode
-extern "C" int __E__785__(
+extern "C" int WINAPI __E__785__(
 	_In_ HDC hdc,
 	_In_ int iBkMode
 	) {
@@ -9169,7 +9169,7 @@ extern "C" __declspec(naked) void __stdcall __E__823__()
 }
 
 // SetTextColor
-extern "C" COLORREF __E__824__(
+extern "C" COLORREF WINAPI __E__824__(
 	_In_ HDC      hdc,
 	_In_ COLORREF crColor
 ){
@@ -9179,7 +9179,7 @@ extern "C" COLORREF __E__824__(
 
 	F _SetTextColor = (F)p[824];
 
-	return RGB(0, 0, 0);
+	return 0;
 }
 
 // SetTextJustification

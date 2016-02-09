@@ -79,13 +79,13 @@ extern "C" HRESULT WINAPI __E__7__(
 
 	F _DirectDrawCreate = (F)p[7];
 
-	IDirectDraw *dd;
-	HRESULT result = _DirectDrawCreate(lpGUID, &dd, pUnkOuter);
+	IDirectDraw *dd = nullptr;
+	// HRESULT result = _DirectDrawCreate(lpGUID, &dd, pUnkOuter);
 
 	IDirectDraw *ddp = (IDirectDraw *)DirectDrawProxyCreate(dd);
 	*lplpDD = ddp;
 
-	return result;
+	return S_OK;
 }
 
 // AcquireDDThreadLock

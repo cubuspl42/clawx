@@ -66,6 +66,8 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 	}
 	STDMETHOD(GetEntries)(THIS_ DWORD a, DWORD b, DWORD c, LPPALETTEENTRY d) {
 		DDRAW_PALETTE_PROXY(GetEntries);
+
+		return S_OK;
 		return ddp->GetEntries(a, b, c, d);
 	}
 	STDMETHOD(Initialize)(THIS_ LPDIRECTDRAW, DWORD, LPPALETTEENTRY) {
@@ -74,6 +76,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 	}
 	STDMETHOD(SetEntries)(THIS_ DWORD a, DWORD b, DWORD c, LPPALETTEENTRY d) {
 		DDRAW_PALETTE_PROXY(SetEntries);
+		return S_OK;
 		return ddp->SetEntries(a, b, c, d);
 	}
 };
@@ -107,7 +110,7 @@ void log_ddsd(LPDDSURFACEDESC ddsd) {
 	log(ddsd->ddpfPixelFormat.dwFourCC, ddsd->dwRefreshRate);
 }
 
-std::vector<char> buffer(640 * 480 * 8);
+std::vector<char> buffer(1920 * 1080 * 32);
 
 class DirectDrawSurfaceProxy : public IDirectDrawSurface3
 {
@@ -160,7 +163,13 @@ public:
 		DDRAW_SURFACE_PROXY(QueryInterface);
 		log("this = ", this);
 
-		auto result = _dds1->QueryInterface(riid, (void**)&_dds3);
+
+
+
+
+
+
+		// auto result = _dds1->QueryInterface(riid, (void**)&_dds3);
 
 		log("dds3 =", _dds3);
 
@@ -176,7 +185,8 @@ public:
 	}
 	STDMETHOD_(ULONG, Release) (THIS) {
 		DDRAW_SURFACE_PROXY(Release);
-		return dds3()->Release();
+		return S_OK;
+		//return dds3()->Release();
 	}
 	/*** IDirectDrawSurface methods ***/
 	STDMETHOD(AddAttachedSurface)(THIS_ LPDIRECTDRAWSURFACE3) {
@@ -242,7 +252,9 @@ public:
 
 		{
 			auto p = new DirectDrawSurfaceProxy(nullptr);
+			p->ddsd = ddsd;
 			*b = p;
+			log("<", p);
 			return S_OK;
 		}
 
@@ -368,12 +380,13 @@ public:
 	}
 	STDMETHOD(IsLost)(THIS) {
 		DDRAW_SURFACE_PROXY(IsLost);
+		return 0;
 		return dds3()->IsLost();
 	}
 	STDMETHOD(Lock)(THIS_ LPRECT a, LPDDSURFACEDESC b, DWORD c, HANDLE d) {
 		DDRAW_SURFACE_PROXY(Lock);
 		log("this = ", this);
-
+		log(ddsd.dwWidth, ddsd.dwHeight);
 		*b = ddsd;
 		b->lpSurface = buffer.data();
 		return S_OK;
@@ -402,6 +415,7 @@ public:
 	}
 	STDMETHOD(SetColorKey)(THIS_ DWORD a, LPDDCOLORKEY b) {
 		DDRAW_SURFACE_PROXY(SetColorKey);
+		return S_OK;
 		return dds3()->SetColorKey(a, b);
 	}
 	STDMETHOD(SetOverlayPosition)(THIS_ LONG, LONG) {
@@ -421,6 +435,7 @@ public:
 	STDMETHOD(Unlock)(THIS_ LPVOID a) {
 		DDRAW_SURFACE_PROXY(Unlock);
 		log("this = ", this);
+		return S_OK;
 		auto result = dds3()->Unlock(a);
 		return result;
 	}
@@ -472,13 +487,13 @@ struct DirectDrawProxy : public IDirectDraw2
 
 		log("this =", this);
 
-		auto result = dd->QueryInterface(riid, (void**)(&dd2));
+		// auto result = dd->QueryInterface(riid, (void**)(&dd2));
 
 		log("<", this);
 
 		*ppvObj = this;
 
-		return result;
+		return S_OK;
 	}
 	STDMETHOD_(ULONG, AddRef) (THIS) {
 		DDRAW_PROXY(AddRef);
@@ -486,6 +501,7 @@ struct DirectDrawProxy : public IDirectDraw2
 	}
 	STDMETHOD_(ULONG, Release) (THIS) {
 		DDRAW_PROXY(Release);
+		return S_OK; // Leak?
 		return dd2->Release();
 	}
 	/*** IDirectDraw methods ***/
@@ -499,10 +515,10 @@ struct DirectDrawProxy : public IDirectDraw2
 	}
 	STDMETHOD(CreatePalette)(THIS_ DWORD a, LPPALETTEENTRY b, LPDIRECTDRAWPALETTE FAR* c, IUnknown FAR *d) {
 		DDRAW_PROXY(CreatePalette);
-		LPDIRECTDRAWPALETTE ddp;
-		auto result = dd2->CreatePalette(a, b, &ddp, d);
+		LPDIRECTDRAWPALETTE ddp = nullptr;
+		//auto result = dd2->CreatePalette(a, b, &ddp, d);
 		*c = new DirectDrawPaletteProxy(ddp);
-		return result;
+		return S_OK;
 	}
 	STDMETHOD(CreateSurface)(THIS_  LPDDSURFACEDESC a, LPDIRECTDRAWSURFACE FAR *b, IUnknown FAR *c) {
 		DDRAW_PROXY(CreateSurface);
@@ -520,7 +536,8 @@ struct DirectDrawProxy : public IDirectDraw2
 #endif
 
 		IDirectDrawSurface *dds = nullptr;
-		auto result = dd2->CreateSurface(a, &dds, c);
+		HRESULT result = S_OK;
+		// result = dd2->CreateSurface(a, &dds, c);
 
 		DirectDrawSurfaceProxy *ddsp = new DirectDrawSurfaceProxy(dds, a);
 		*b = (IDirectDrawSurface*)ddsp;
@@ -717,9 +734,11 @@ struct DirectDrawProxy : public IDirectDraw2
 		DDRAW_PROXY(GetDisplayMode);
 		log(">", a);
 
-#if 0
-		a->dwFlags = DDSD_WIDTH | DDSD_HEIGHT;
-		a->dwWidth = 640, a->dwHeight = 480;
+#if 1
+		//a->dwFlags = DDSD_WIDTH | DDSD_HEIGHT;
+		//a->dwWidth = 640, a->dwHeight = 480;
+		Load("EnumDisplayModes_0", a);
+
 		return S_OK;
 #endif
 
@@ -782,6 +801,8 @@ struct DirectDrawProxy : public IDirectDraw2
 	STDMETHOD(SetCooperativeLevel)(THIS_ HWND hWnd, DWORD flags) {
 		DDRAW_PROXY(SetCooperativeLevel);
 
+		return S_OK;
+
 		log("hWnd =", hWnd);
 		log_flags("flags", { 
 			FLAG(DDSCL_FULLSCREEN),
@@ -805,7 +826,7 @@ struct DirectDrawProxy : public IDirectDraw2
 		log(">", w, h, c, d);
 		w = 1920, h = 1080;
 
-		// return S_OK;
+		return S_OK;
 
 		auto result = dd2->SetDisplayMode(w, h, c, d, e);
 		log("*", result);
@@ -813,6 +834,7 @@ struct DirectDrawProxy : public IDirectDraw2
 	}
 	STDMETHOD(WaitForVerticalBlank)(THIS_ DWORD a, HANDLE b) {
 		DDRAW_PROXY(WaitForVerticalBlank);
+		return S_OK;
 		return dd2->WaitForVerticalBlank(a, b);
 	}
 	/*** Added in the v2 interface ***/

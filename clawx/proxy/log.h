@@ -94,3 +94,4 @@ void log_flags(std::string fn, std::vector<std::pair<unsigned, std::string>> fde
 #define PROXY(symbol) log(DLL_NAME, #symbol);
 
 #define PROXY_UNIMPLEMENTED() (log_unimplemented(), 0)
+
