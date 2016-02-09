@@ -9,6 +9,8 @@ HINSTANCE hLThis = 0;
 HINSTANCE hL = 0;
 FARPROC p[1025] = { 0 };
 
+#define PROXY(a)
+
 BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 {
 	if (reason == DLL_PROCESS_ATTACH)
@@ -3206,13 +3208,15 @@ extern "C" __declspec(naked) void __stdcall __E__211__()
 }
 
 // DrawTextA
-extern "C" __declspec(naked) void __stdcall __E__212__()
-{
+extern "C" int __E__212__(
+	_In_    HDC     hDC,
+	_Inout_ LPCTSTR lpchText,
+	_In_    int     nCount,
+	_Inout_ LPRECT  lpRect,
+	_In_    UINT    uFormat
+){
 	PROXY(DrawTextA)
-		__asm
-	{
-		jmp p[212 * 4];
-	}
+		return 1;
 }
 
 // DrawTextExA

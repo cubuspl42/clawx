@@ -1,6 +1,19 @@
 #define DLL_NAME "PROXY"
 
 #include "proxy.h"
+#include "dump.h"
+
+template<typename T>
+size_t h(const T* ptr) {
+	const char *c = (const char *)ptr;
+	int n = sizeof(T);
+	std::size_t seed = 0;
+	for (int i = 0; i < n; ++i) {
+		char j = c[i];
+		seed ^= j + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+	}
+	return seed;
+}
 
 const unsigned MAGIC = 0x1a1b1c00;
 
@@ -69,6 +82,33 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 
 #define _DDSCL_NORMAL 0
 
+void log_ddsd(LPDDSURFACEDESC ddsd) {
+	log_flags("ddsd->dwFlags", {
+		FLAG(DDSD_ALL),
+		FLAG(DDSD_ALPHABITDEPTH),
+		FLAG(DDSD_BACKBUFFERCOUNT),
+		FLAG(DDSD_CAPS),
+		FLAG(DDSD_CKDESTBLT),
+		FLAG(DDSD_CKDESTOVERLAY),
+		FLAG(DDSD_CKSRCBLT),
+		FLAG(DDSD_CKSRCOVERLAY),
+		FLAG(DDSD_HEIGHT),
+		FLAG(DDSD_LINEARSIZE),
+		FLAG(DDSD_LPSURFACE),
+		FLAG(DDSD_MIPMAPCOUNT),
+		FLAG(DDSD_PITCH),
+		FLAG(DDSD_PIXELFORMAT),
+		FLAG(DDSD_REFRESHRATE),
+		FLAG(DDSD_TEXTURESTAGE),
+		FLAG(DDSD_WIDTH),
+		FLAG(DDSD_ZBUFFERBITDEPTH),
+	}, ddsd->dwFlags);
+	log(ddsd->dwWidth, ddsd->dwHeight);
+	log(ddsd->ddpfPixelFormat.dwFourCC, ddsd->dwRefreshRate);
+}
+
+std::vector<char> buffer(640 * 480 * 8);
+
 class DirectDrawSurfaceProxy : public IDirectDrawSurface3
 {
 	static IDirectDrawSurface3* unwrap(IDirectDrawSurface3 *dds3) {
@@ -92,6 +132,8 @@ public:
 	int magic = MAGIC;
 	IDirectDrawSurface *_dds1 = nullptr;
 	IDirectDrawSurface3 *_dds3 = nullptr;
+	std::string t;
+	DDSURFACEDESC ddsd;
 
 	IDirectDrawSurface3 *dds3() {
 		if (!_dds3) {
@@ -100,13 +142,16 @@ public:
 		return _dds3;
 	}
 
-	DirectDrawSurfaceProxy() {}
+	// DirectDrawSurfaceProxy() {}
 
-	DirectDrawSurfaceProxy(IDirectDrawSurface *dds1) {
+	DirectDrawSurfaceProxy(IDirectDrawSurface *dds1, LPDDSURFACEDESC ddsd) {
+		t = current_time();
 		this->_dds1 = dds1;
+		this->ddsd = *ddsd;
 	}
 
 	DirectDrawSurfaceProxy(IDirectDrawSurface3 *dds3) {
+		t = current_time();
 		this->_dds3 = dds3;
 	}
 
@@ -146,6 +191,9 @@ public:
 		DDRAW_SURFACE_PROXY(Blt);
 		log("this =", this);
 		log("bdds3 =", c);
+
+		return S_OK;
+
 		auto result = dds3()->Blt(a, unwrap(b), c, d, e);
 		return result;
 	}
@@ -157,6 +205,9 @@ public:
 		DDRAW_SURFACE_PROXY(BltFast);
 		log("this = ", this);
 		log("bdds3 = ", c);
+
+		return S_OK;
+
 		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy*)c;
 		auto result = dds3()->BltFast(a, b, unwrap(c), d, e);
 		return result;
@@ -178,6 +229,9 @@ public:
 		DDRAW_SURFACE_PROXY(Flip);
 		log("this = ", this);
 		log("fdds3 = ", a);
+
+		return S_OK;
+
 		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy*)a;
 		auto result = dds3()->Flip(unwrap(a), b);
 		return result;
@@ -185,6 +239,14 @@ public:
 	STDMETHOD(GetAttachedSurface)(THIS_ LPDDSCAPS a, LPDIRECTDRAWSURFACE3 FAR *b) {
 		DDRAW_SURFACE_PROXY(GetAttachedSurface);
 		log("this = ", this);
+
+		{
+			auto p = new DirectDrawSurfaceProxy(nullptr);
+			*b = p;
+			return S_OK;
+		}
+
+
 		LPDIRECTDRAWSURFACE3 adds3;
 		auto result = dds3()->GetAttachedSurface(a, &adds3);
 		if (adds3) {
@@ -229,6 +291,10 @@ public:
 	}
 	STDMETHOD(GetDC)(THIS_ HDC FAR *a) {
 		DDRAW_SURFACE_PROXY(GetDC);
+
+		*a = (HDC)1;
+		return S_OK;
+
 		return dds3()->GetDC(a);
 	}
 	STDMETHOD(GetFlipStatus)(THIS_ DWORD) {
@@ -252,9 +318,49 @@ public:
 	STDMETHOD(GetSurfaceDesc)(THIS_ LPDDSURFACEDESC a) {
 		DDRAW_SURFACE_PROXY(GetSurfaceDesc);
 		log("this = ", this);
+
+#if 0
 		auto result = dds3()->GetSurfaceDesc(a);
+		log("h(ddsd)", h(&ddsd));
+		log_ddsd(&ddsd);
+		log("h(a)", h(a));
+		log_ddsd(a);
 		log("<", a->lpSurface);
 		return result;
+#endif
+		bool dump = false;
+
+		if (ddsd.dwWidth) {
+			DDSURFACEDESC ddsd00 = ddsd;
+			ddsd00.dwWidth = ddsd00.dwHeight = 0;
+			std::string s = "GetSurfaceDesc_" + std::to_string(h(&ddsd00));
+
+			if (dump) {
+				auto result = dds3()->GetSurfaceDesc(a);
+				Dump(s, a);
+			}
+			else {
+				Load(s, a);
+				a->dwWidth = ddsd.dwWidth;
+				a->dwHeight = ddsd.dwHeight;
+			}
+		}
+		else {
+			std::string s = "GetSurfaceDesc_" + std::to_string(h(&ddsd));
+
+			if (dump) {
+				auto result = dds3()->GetSurfaceDesc(a);
+				Dump(s, a);
+			}
+			else {
+				Load(s, a);
+			}
+		}
+
+		log_ddsd(&ddsd);
+		log_ddsd(a);
+
+		return S_OK;
 	}
 	STDMETHOD(Initialize)(THIS_ LPDIRECTDRAW, LPDDSURFACEDESC) {
 		DDRAW_SURFACE_PROXY(Initialize);
@@ -267,6 +373,11 @@ public:
 	STDMETHOD(Lock)(THIS_ LPRECT a, LPDDSURFACEDESC b, DWORD c, HANDLE d) {
 		DDRAW_SURFACE_PROXY(Lock);
 		log("this = ", this);
+
+		*b = ddsd;
+		b->lpSurface = buffer.data();
+		return S_OK;
+
 		auto result = dds3()->Lock(a, b, c, d);
 		if (b->lpSurface) {
 			log("Lock:", b->lpSurface);
@@ -278,7 +389,8 @@ public:
 	}
 	STDMETHOD(ReleaseDC)(THIS_ HDC a) {
 		DDRAW_SURFACE_PROXY(ReleaseDC);
-		return dds3()->ReleaseDC(a);
+		return S_OK;
+		//return dds3()->ReleaseDC(a);
 	}
 	STDMETHOD(Restore)(THIS) {
 		DDRAW_SURFACE_PROXY(Restore);
@@ -299,6 +411,9 @@ public:
 	STDMETHOD(SetPalette)(THIS_ LPDIRECTDRAWPALETTE a) {
 		DDRAW_SURFACE_PROXY(SetPalette);
 		log("this = ", this);
+
+		return S_OK;
+
 		DirectDrawPaletteProxy *ddpp = (DirectDrawPaletteProxy*)a;
 		auto result = dds3()->SetPalette(DirectDrawPaletteProxy::unwrap(a));
 		return result;
@@ -339,31 +454,6 @@ public:
 		return PROXY_UNIMPLEMENTED();
 	}
 };
-
-void log_ddsd(LPDDSURFACEDESC ddsd) {
-	log_flags("ddsd->dwFlags", {
-		FLAG(DDSD_ALL),
-		FLAG(DDSD_ALPHABITDEPTH),
-		FLAG(DDSD_BACKBUFFERCOUNT),
-		FLAG(DDSD_CAPS),
-		FLAG(DDSD_CKDESTBLT),
-		FLAG(DDSD_CKDESTOVERLAY),
-		FLAG(DDSD_CKSRCBLT),
-		FLAG(DDSD_CKSRCOVERLAY),
-		FLAG(DDSD_HEIGHT),
-		FLAG(DDSD_LINEARSIZE),
-		FLAG(DDSD_LPSURFACE),
-		FLAG(DDSD_MIPMAPCOUNT),
-		FLAG(DDSD_PITCH),
-		FLAG(DDSD_PIXELFORMAT),
-		FLAG(DDSD_REFRESHRATE),
-		FLAG(DDSD_TEXTURESTAGE),
-		FLAG(DDSD_WIDTH),
-		FLAG(DDSD_ZBUFFERBITDEPTH),
-	}, ddsd->dwFlags);
-	log(ddsd->dwWidth, ddsd->dwHeight);
-	log(ddsd->ddpfPixelFormat.dwFourCC, ddsd->dwRefreshRate);
-}
 
 #define DDRAW_PROXY(method) log("DirectDrawProxy", #method);
 
@@ -420,6 +510,7 @@ struct DirectDrawProxy : public IDirectDraw2
 		log("> w:", a->dwWidth, "h:", a->dwHeight, "bbc:", a->dwBackBufferCount);
 		log_ddsd(a);
 
+
 #if _DDSCL_NORMAL
 		DDSURFACEDESC &ddsd = *a;
 		if (ddsd.ddsCaps.dwCaps & DDSCAPS_PRIMARYSURFACE) {
@@ -431,7 +522,7 @@ struct DirectDrawProxy : public IDirectDraw2
 		IDirectDrawSurface *dds = nullptr;
 		auto result = dd2->CreateSurface(a, &dds, c);
 
-		DirectDrawSurfaceProxy *ddsp = new DirectDrawSurfaceProxy(dds);
+		DirectDrawSurfaceProxy *ddsp = new DirectDrawSurfaceProxy(dds, a);
 		*b = (IDirectDrawSurface*)ddsp;
 
 		log("dds1 =", dds);
@@ -454,6 +545,12 @@ struct DirectDrawProxy : public IDirectDraw2
 
 	static HRESULT FAR PASCAL EnumDisplayModesCallback(LPDDSURFACEDESC a, LPVOID b) {
 		DDRAW_PROXY(EnumDisplayModesCallback);
+		static int i = 0;
+		if (i == 0) {
+			Dump("EnumDisplayModes_0", a);
+			++i;
+		}
+
 		DirectDrawProxy *self = (DirectDrawProxy *)b;
 		log_ddsd(a);
 		auto result = self->_EnumDisplayModesCallback(a, nullptr);
@@ -463,6 +560,13 @@ struct DirectDrawProxy : public IDirectDraw2
 	STDMETHOD(EnumDisplayModes)(THIS_ DWORD a, LPDDSURFACEDESC b, LPVOID c, LPDDENUMMODESCALLBACK d) {
 		DDRAW_PROXY(EnumDisplayModes);
 		log(">", a, b, c, d);
+
+		DDSURFACEDESC ddsd;
+		Load("EnumDisplayModes_0", &ddsd);
+		d(&ddsd, nullptr);
+
+		return S_OK;
+
 		_EnumDisplayModesCallback = d;
 		auto result = dd2->EnumDisplayModes(a, b, this, EnumDisplayModesCallback);
 		log("*", result);
@@ -479,7 +583,14 @@ struct DirectDrawProxy : public IDirectDraw2
 	STDMETHOD(GetCaps)(THIS_ LPDDCAPS a, LPDDCAPS b) {
 		DDRAW_PROXY(GetCaps);
 		log(">", a, b);
-		auto result = dd2->GetCaps(a, b);
+		HRESULT result = S_OK;
+		//auto result = dd2->GetCaps(a, b);
+
+		Load("GetCaps_a", a);
+		Load("GetCaps_b", a);
+
+		return result;
+
 		if (a) log_flags("a->dwCaps", {
 			FLAG(DDCAPS_3D),
 			FLAG(DDCAPS_ALIGNBOUNDARYDEST),
@@ -605,8 +716,14 @@ struct DirectDrawProxy : public IDirectDraw2
 	STDMETHOD(GetDisplayMode)(THIS_ LPDDSURFACEDESC a) {
 		DDRAW_PROXY(GetDisplayMode);
 		log(">", a);
-		auto result = dd2->GetDisplayMode(a);
+
+#if 0
+		a->dwFlags = DDSD_WIDTH | DDSD_HEIGHT;
 		a->dwWidth = 640, a->dwHeight = 480;
+		return S_OK;
+#endif
+
+		auto result = dd2->GetDisplayMode(a);
 		log_ddsd(a);
 		log("*", result);
 		return result;
@@ -676,6 +793,9 @@ struct DirectDrawProxy : public IDirectDraw2
 #if _DDSCL_NORMAL
 		flags = DDSCL_NORMAL;
 #endif
+
+		// return S_OK;
+
 		auto result = dd2->SetCooperativeLevel(hWnd, flags);
 		log("*", result);
 		return result;
@@ -684,6 +804,9 @@ struct DirectDrawProxy : public IDirectDraw2
 		DDRAW_PROXY(SetDisplayMode);
 		log(">", w, h, c, d);
 		w = 1920, h = 1080;
+
+		// return S_OK;
+
 		auto result = dd2->SetDisplayMode(w, h, c, d, e);
 		log("*", result);
 		return result;

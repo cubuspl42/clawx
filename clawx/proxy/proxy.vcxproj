@@ -167,8 +167,10 @@
     <ClCompile Include="proxy.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="dump.h" />
     <ClInclude Include="log.h" />
     <ClInclude Include="proxy.h" />
+    <ClInclude Include="proxydb.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

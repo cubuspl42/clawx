@@ -8761,23 +8761,31 @@ extern "C" __declspec(naked) void __stdcall __E__783__()
 }
 
 // SetBkColor
-extern "C" __declspec(naked) void __stdcall __E__784__()
-{
+extern "C" int __E__784__( // !!!
+	_In_ HDC hdc,
+	_In_ int iBkMode
+) {
 	PROXY(SetBkColor)
-		__asm
-	{
-		jmp p[784 * 4];
-	}
+		
+	typedef decltype(&__E__784__) F;
+
+	F _SetBkColor = (F)p[784];
+
+	return OPAQUE;
 }
 
 // SetBkMode
-extern "C" __declspec(naked) void __stdcall __E__785__()
-{
-	PROXY(SetBkMode)
-		__asm
-	{
-		jmp p[785 * 4];
-	}
+extern "C" int __E__785__(
+	_In_ HDC hdc,
+	_In_ int iBkMode
+	) {
+	PROXY(SetBkColor)
+
+	typedef decltype(&__E__785__) F;
+
+	F _SetBkColor = (F)p[785];
+
+	return OPAQUE;
 }
 
 // SetBoundsRect
@@ -9161,13 +9169,17 @@ extern "C" __declspec(naked) void __stdcall __E__823__()
 }
 
 // SetTextColor
-extern "C" __declspec(naked) void __stdcall __E__824__()
-{
+extern "C" COLORREF __E__824__(
+	_In_ HDC      hdc,
+	_In_ COLORREF crColor
+){
 	PROXY(SetTextColor)
-		__asm
-	{
-		jmp p[824 * 4];
-	}
+	
+	typedef decltype(&__E__824__) F;
+
+	F _SetTextColor = (F)p[824];
+
+	return RGB(0, 0, 0);
 }
 
 // SetTextJustification
