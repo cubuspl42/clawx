@@ -146,9 +146,7 @@ public:
 		DDRAW_SURFACE_PROXY(Blt);
 		proxy_log("this =", this);
 		proxy_log("bdds3 =", c);
-		STACK_PUSH(Blt);
 		auto result = dds3()->Blt(a, unwrap(b), c, d, e);
-		STACK_POP(Blt);
 		return result;
 	}
 	STDMETHOD(BltBatch)(THIS_ LPDDBLTBATCH, DWORD, DWORD) {
@@ -159,10 +157,8 @@ public:
 		DDRAW_SURFACE_PROXY(BltFast);
 		proxy_log("this = ", this);
 		proxy_log("bdds3 = ", c);
-		STACK_PUSH(BltFast);
 		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy*)c;
 		auto result = dds3()->BltFast(a, b, unwrap(c), d, e);
-		STACK_POP(BltFast);
 		return result;
 	}
 
@@ -180,18 +176,15 @@ public:
 	}
 	STDMETHOD(Flip)(THIS_ LPDIRECTDRAWSURFACE3 a, DWORD b) {
 		DDRAW_SURFACE_PROXY(Flip);
-		STACK_PUSH(Flip);
 		proxy_log("this = ", this);
 		proxy_log("fdds3 = ", a);
 		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy*)a;
 		auto result = dds3()->Flip(unwrap(a), b);
-		STACK_POP(Flip);
 		return result;
 	}
 	STDMETHOD(GetAttachedSurface)(THIS_ LPDDSCAPS a, LPDIRECTDRAWSURFACE3 FAR *b) {
 		DDRAW_SURFACE_PROXY(GetAttachedSurface);
 		proxy_log("this = ", this);
-		STACK_PUSH(GetAttachedSurface);
 		LPDIRECTDRAWSURFACE3 adds3;
 		auto result = dds3()->GetAttachedSurface(a, &adds3);
 		if (adds3) {
@@ -211,7 +204,6 @@ public:
 		*b = p;
 #endif
 		proxy_log("<", *b);
-		STACK_POP(GetAttachedSurface);
 		return result;
 #if _DDSCL_NORMAL
 		return S_OK;
@@ -253,19 +245,15 @@ public:
 	}
 	STDMETHOD(GetPixelFormat)(THIS_ LPDDPIXELFORMAT a) {
 		DDRAW_SURFACE_PROXY(GetPixelFormat);
-		STACK_PUSH(GetPixelFormat);
 		proxy_log("this = ", this);
 		auto result = dds3()->GetPixelFormat(a);
-		STACK_POP(GetPixelFormat);
 		return result;
 	}
 	STDMETHOD(GetSurfaceDesc)(THIS_ LPDDSURFACEDESC a) {
 		DDRAW_SURFACE_PROXY(GetSurfaceDesc);
 		proxy_log("this = ", this);
-		STACK_PUSH(GetSurfaceDesc);
 		auto result = dds3()->GetSurfaceDesc(a);
 		proxy_log("<", a->lpSurface);
-		STACK_POP(GetSurfaceDesc);
 		return result;
 	}
 	STDMETHOD(Initialize)(THIS_ LPDIRECTDRAW, LPDDSURFACEDESC) {
@@ -279,7 +267,6 @@ public:
 	STDMETHOD(Lock)(THIS_ LPRECT a, LPDDSURFACEDESC b, DWORD c, HANDLE d) {
 		DDRAW_SURFACE_PROXY(Lock);
 		proxy_log("this = ", this);
-		STACK_PUSH(Lock);
 		auto result = dds3()->Lock(a, b, c, d);
 		if (b->lpSurface) {
 			proxy_log("Lock:", b->lpSurface);
@@ -287,7 +274,6 @@ public:
 		else {
 			proxy_log("Lock: NULL");
 		}
-		STACK_POP(Lock);
 		return result;
 	}
 	STDMETHOD(ReleaseDC)(THIS_ HDC a) {
@@ -313,18 +299,14 @@ public:
 	STDMETHOD(SetPalette)(THIS_ LPDIRECTDRAWPALETTE a) {
 		DDRAW_SURFACE_PROXY(SetPalette);
 		proxy_log("this = ", this);
-		STACK_PUSH(SetPalette);
 		DirectDrawPaletteProxy *ddpp = (DirectDrawPaletteProxy*)a;
 		auto result = dds3()->SetPalette(DirectDrawPaletteProxy::unwrap(a));
-		STACK_POP(SetPalette);
 		return result;
 	}
 	STDMETHOD(Unlock)(THIS_ LPVOID a) {
 		DDRAW_SURFACE_PROXY(Unlock);
 		proxy_log("this = ", this);
-		STACK_PUSH(Unlock);
 		auto result = dds3()->Unlock(a);
-		STACK_POP(Unlock);
 		return result;
 	}
 	STDMETHOD(UpdateOverlay)(THIS_ LPRECT, LPDIRECTDRAWSURFACE3, LPRECT, DWORD, LPDDOVERLAYFX) {
