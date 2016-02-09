@@ -13,7 +13,7 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 {
 	if (reason == DLL_PROCESS_ATTACH)
 	{
-		proxy_log(DLL_NAME, "DLL_PROCESS_ATTACH");
+		log(DLL_NAME, "DLL_PROCESS_ATTACH");
 
 		hLThis = hInst;
 		hL = LoadLibrary("C:\\Windows\\System32\\gdi32.dll");
@@ -904,19 +904,17 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 	}
 	else if (reason == DLL_PROCESS_DETACH)
 	{
-		proxy_log(DLL_NAME, "DLL_PROCESS_DETACH");
+		log(DLL_NAME, "DLL_PROCESS_DETACH");
 		FreeLibrary(hL);
 	}
 	else if (reason == DLL_THREAD_ATTACH) {
-		// proxy_log(DLL_NAME, "DLL_THREAD_ATTACH");
-		++thread_number;
-		thread_index = thread_number;
+		// log(DLL_NAME, "DLL_THREAD_ATTACH");
 	}
 	else if (reason == DLL_THREAD_DETACH) {
-		// proxy_log(DLL_NAME, "DLL_THREAD_DETACH");
+		// log(DLL_NAME, "DLL_THREAD_DETACH");
 	}
 	else {
-		proxy_log(DLL_NAME " ??? ", reason);
+		log(DLL_NAME " ??? ", reason);
 	}
 
 	return 1;

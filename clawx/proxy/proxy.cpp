@@ -4,7 +4,7 @@
 
 const unsigned MAGIC = 0x1a1b1c00;
 
-#define DDRAW_PALETTE_PROXY(method) proxy_log("DirectDrawPaletteProxy", #method);
+#define DDRAW_PALETTE_PROXY(method) log("DirectDrawPaletteProxy", #method);
 
 struct DirectDrawPaletteProxy : public IDirectDrawPalette
 {
@@ -12,7 +12,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 		if (!ddp) return nullptr;
 		DirectDrawPaletteProxy *ddpp = (DirectDrawPaletteProxy*)ddp;
 		if (ddpp->magic != MAGIC) {
-			proxy_log("!~~~~~~~ magic != MAGIC ~~~~~~~!");
+			log("!~~~~~~~ magic != MAGIC ~~~~~~~!");
 		}
 		return ddpp->ddp;
 	}
@@ -21,7 +21,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 		if (!ddp) return nullptr;
 		DirectDrawPaletteProxy *ddpp = (DirectDrawPaletteProxy*)ddp;
 		if (ddpp->magic == MAGIC) {
-			proxy_log("!~~~~~~~ magic == MAGIC ~~~~~~~!");
+			log("!~~~~~~~ magic == MAGIC ~~~~~~~!");
 		}
 		return new DirectDrawPaletteProxy(ddp);
 	}
@@ -65,7 +65,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 	}
 };
 
-#define DDRAW_SURFACE_PROXY(method) proxy_log("DirectDrawSurfaceProxy", #method);
+#define DDRAW_SURFACE_PROXY(method) log("DirectDrawSurfaceProxy", #method);
 
 #define _DDSCL_NORMAL 0
 
@@ -75,7 +75,7 @@ class DirectDrawSurfaceProxy : public IDirectDrawSurface3
 		if (!dds3) return nullptr;
 		DirectDrawSurfaceProxy *dds3p = (DirectDrawSurfaceProxy*)dds3;
 		if (dds3p->magic != MAGIC) {
-			proxy_log("!~~~~~~~ magic != MAGIC ~~~~~~~!");
+			log("!~~~~~~~ magic != MAGIC ~~~~~~~!");
 		}
 		return dds3p->dds3();
 	}
@@ -84,7 +84,7 @@ class DirectDrawSurfaceProxy : public IDirectDrawSurface3
 		if (!dds3) return nullptr;
 		DirectDrawSurfaceProxy *dds3p = (DirectDrawSurfaceProxy*)dds3;
 		if (dds3p->magic == MAGIC) {
-			proxy_log("!~~~~~~~ magic == MAGIC ~~~~~~~!");
+			log("!~~~~~~~ magic == MAGIC ~~~~~~~!");
 		}
 		return new DirectDrawSurfaceProxy(dds3);
 	}
@@ -95,7 +95,7 @@ public:
 
 	IDirectDrawSurface3 *dds3() {
 		if (!_dds3) {
-			proxy_log("_dds3 = NULL");
+			log("_dds3 = NULL");
 		}
 		return _dds3;
 	}
@@ -113,13 +113,13 @@ public:
 	/*** IUnknown methods ***/
 	STDMETHOD(QueryInterface) (THIS_ REFIID riid, LPVOID FAR * ppvObj) {
 		DDRAW_SURFACE_PROXY(QueryInterface);
-		proxy_log("this = ", this);
+		log("this = ", this);
 
 		auto result = _dds1->QueryInterface(riid, (void**)&_dds3);
 
-		proxy_log("dds3 =", _dds3);
+		log("dds3 =", _dds3);
 
-		proxy_log("<", this);
+		log("<", this);
 
 		*ppvObj = this;
 
@@ -144,8 +144,8 @@ public:
 	}
 	STDMETHOD(Blt)(THIS_ LPRECT a, LPDIRECTDRAWSURFACE3 b, LPRECT c, DWORD d, LPDDBLTFX e) {
 		DDRAW_SURFACE_PROXY(Blt);
-		proxy_log("this =", this);
-		proxy_log("bdds3 =", c);
+		log("this =", this);
+		log("bdds3 =", c);
 		auto result = dds3()->Blt(a, unwrap(b), c, d, e);
 		return result;
 	}
@@ -155,8 +155,8 @@ public:
 	}
 	STDMETHOD(BltFast)(THIS_ DWORD a, DWORD b, LPDIRECTDRAWSURFACE3 c, LPRECT d, DWORD e) {
 		DDRAW_SURFACE_PROXY(BltFast);
-		proxy_log("this = ", this);
-		proxy_log("bdds3 = ", c);
+		log("this = ", this);
+		log("bdds3 = ", c);
 		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy*)c;
 		auto result = dds3()->BltFast(a, b, unwrap(c), d, e);
 		return result;
@@ -176,24 +176,24 @@ public:
 	}
 	STDMETHOD(Flip)(THIS_ LPDIRECTDRAWSURFACE3 a, DWORD b) {
 		DDRAW_SURFACE_PROXY(Flip);
-		proxy_log("this = ", this);
-		proxy_log("fdds3 = ", a);
+		log("this = ", this);
+		log("fdds3 = ", a);
 		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy*)a;
 		auto result = dds3()->Flip(unwrap(a), b);
 		return result;
 	}
 	STDMETHOD(GetAttachedSurface)(THIS_ LPDDSCAPS a, LPDIRECTDRAWSURFACE3 FAR *b) {
 		DDRAW_SURFACE_PROXY(GetAttachedSurface);
-		proxy_log("this = ", this);
+		log("this = ", this);
 		LPDIRECTDRAWSURFACE3 adds3;
 		auto result = dds3()->GetAttachedSurface(a, &adds3);
 		if (adds3) {
-			proxy_log("<", adds3);
+			log("<", adds3);
 		}
 		else {
-			proxy_log("< NULL");
+			log("< NULL");
 		}
-		proxy_log("adds3 = ", adds3);
+		log("adds3 = ", adds3);
 #if _DDSCL_NORMAL
 		auto p = new DirectDrawSurfaceProxy();
 		//p->_dds1 = (IDirectDrawSurface*)0xAA00AA00;
@@ -203,7 +203,7 @@ public:
 		auto p = (DirectDrawSurfaceProxy*)wrap(adds3);
 		*b = p;
 #endif
-		proxy_log("<", *b);
+		log("<", *b);
 		return result;
 #if _DDSCL_NORMAL
 		return S_OK;
@@ -245,15 +245,15 @@ public:
 	}
 	STDMETHOD(GetPixelFormat)(THIS_ LPDDPIXELFORMAT a) {
 		DDRAW_SURFACE_PROXY(GetPixelFormat);
-		proxy_log("this = ", this);
+		log("this = ", this);
 		auto result = dds3()->GetPixelFormat(a);
 		return result;
 	}
 	STDMETHOD(GetSurfaceDesc)(THIS_ LPDDSURFACEDESC a) {
 		DDRAW_SURFACE_PROXY(GetSurfaceDesc);
-		proxy_log("this = ", this);
+		log("this = ", this);
 		auto result = dds3()->GetSurfaceDesc(a);
-		proxy_log("<", a->lpSurface);
+		log("<", a->lpSurface);
 		return result;
 	}
 	STDMETHOD(Initialize)(THIS_ LPDIRECTDRAW, LPDDSURFACEDESC) {
@@ -266,13 +266,13 @@ public:
 	}
 	STDMETHOD(Lock)(THIS_ LPRECT a, LPDDSURFACEDESC b, DWORD c, HANDLE d) {
 		DDRAW_SURFACE_PROXY(Lock);
-		proxy_log("this = ", this);
+		log("this = ", this);
 		auto result = dds3()->Lock(a, b, c, d);
 		if (b->lpSurface) {
-			proxy_log("Lock:", b->lpSurface);
+			log("Lock:", b->lpSurface);
 		}
 		else {
-			proxy_log("Lock: NULL");
+			log("Lock: NULL");
 		}
 		return result;
 	}
@@ -298,14 +298,14 @@ public:
 	}
 	STDMETHOD(SetPalette)(THIS_ LPDIRECTDRAWPALETTE a) {
 		DDRAW_SURFACE_PROXY(SetPalette);
-		proxy_log("this = ", this);
+		log("this = ", this);
 		DirectDrawPaletteProxy *ddpp = (DirectDrawPaletteProxy*)a;
 		auto result = dds3()->SetPalette(DirectDrawPaletteProxy::unwrap(a));
 		return result;
 	}
 	STDMETHOD(Unlock)(THIS_ LPVOID a) {
 		DDRAW_SURFACE_PROXY(Unlock);
-		proxy_log("this = ", this);
+		log("this = ", this);
 		auto result = dds3()->Unlock(a);
 		return result;
 	}
@@ -340,7 +340,32 @@ public:
 	}
 };
 
-#define DDRAW_PROXY(method) proxy_log("DirectDrawProxy", #method);
+void log_ddsd(LPDDSURFACEDESC ddsd) {
+	log_flags("ddsd->dwFlags", {
+		FLAG(DDSD_ALL),
+		FLAG(DDSD_ALPHABITDEPTH),
+		FLAG(DDSD_BACKBUFFERCOUNT),
+		FLAG(DDSD_CAPS),
+		FLAG(DDSD_CKDESTBLT),
+		FLAG(DDSD_CKDESTOVERLAY),
+		FLAG(DDSD_CKSRCBLT),
+		FLAG(DDSD_CKSRCOVERLAY),
+		FLAG(DDSD_HEIGHT),
+		FLAG(DDSD_LINEARSIZE),
+		FLAG(DDSD_LPSURFACE),
+		FLAG(DDSD_MIPMAPCOUNT),
+		FLAG(DDSD_PITCH),
+		FLAG(DDSD_PIXELFORMAT),
+		FLAG(DDSD_REFRESHRATE),
+		FLAG(DDSD_TEXTURESTAGE),
+		FLAG(DDSD_WIDTH),
+		FLAG(DDSD_ZBUFFERBITDEPTH),
+	}, ddsd->dwFlags);
+	log(ddsd->dwWidth, ddsd->dwHeight);
+	log(ddsd->ddpfPixelFormat.dwFourCC, ddsd->dwRefreshRate);
+}
+
+#define DDRAW_PROXY(method) log("DirectDrawProxy", #method);
 
 struct DirectDrawProxy : public IDirectDraw2
 {
@@ -355,11 +380,11 @@ struct DirectDrawProxy : public IDirectDraw2
 	STDMETHOD(QueryInterface) (THIS_ REFIID riid, LPVOID FAR * ppvObj) {
 		DDRAW_PROXY(QueryInterface);
 
-		proxy_log("this =", this);
+		log("this =", this);
 
 		auto result = dd->QueryInterface(riid, (void**)(&dd2));
 
-		proxy_log("<", this);
+		log("<", this);
 
 		*ppvObj = this;
 
@@ -391,8 +416,9 @@ struct DirectDrawProxy : public IDirectDraw2
 	}
 	STDMETHOD(CreateSurface)(THIS_  LPDDSURFACEDESC a, LPDIRECTDRAWSURFACE FAR *b, IUnknown FAR *c) {
 		DDRAW_PROXY(CreateSurface);
-		proxy_log(">", a, b, c);
-		proxy_log("> w:", a->dwWidth, "h:", a->dwHeight, "bbc:", a->dwBackBufferCount);
+		log(">", a, b, c);
+		log("> w:", a->dwWidth, "h:", a->dwHeight, "bbc:", a->dwBackBufferCount);
+		log_ddsd(a);
 
 #if _DDSCL_NORMAL
 		DDSURFACEDESC &ddsd = *a;
@@ -408,14 +434,14 @@ struct DirectDrawProxy : public IDirectDraw2
 		DirectDrawSurfaceProxy *ddsp = new DirectDrawSurfaceProxy(dds);
 		*b = (IDirectDrawSurface*)ddsp;
 
-		proxy_log("dds1 =", dds);
+		log("dds1 =", dds);
 		if (result) {
-			proxy_log("*", (void*)result);
+			log("*", (void*)result);
 		}
 		else {
-			proxy_log("* S_OK");
+			log("* S_OK");
 		}
-		proxy_log("<", ddsp);
+		log("<", ddsp);
 
 		return result;
 	}
@@ -423,11 +449,23 @@ struct DirectDrawProxy : public IDirectDraw2
 		DDRAW_PROXY(DuplicateSurface);
 		return PROXY_UNIMPLEMENTED();
 	}
+
+	LPDDENUMMODESCALLBACK _EnumDisplayModesCallback = nullptr;
+
+	static HRESULT FAR PASCAL EnumDisplayModesCallback(LPDDSURFACEDESC a, LPVOID b) {
+		DDRAW_PROXY(EnumDisplayModesCallback);
+		DirectDrawProxy *self = (DirectDrawProxy *)b;
+		log_ddsd(a);
+		auto result = self->_EnumDisplayModesCallback(a, nullptr);
+		return result;
+	}
+
 	STDMETHOD(EnumDisplayModes)(THIS_ DWORD a, LPDDSURFACEDESC b, LPVOID c, LPDDENUMMODESCALLBACK d) {
 		DDRAW_PROXY(EnumDisplayModes);
-		proxy_log(">", a, b, c, d);
-		auto result = dd2->EnumDisplayModes(a, b, c, d);
-		proxy_log("*", result);
+		log(">", a, b, c, d);
+		_EnumDisplayModesCallback = d;
+		auto result = dd2->EnumDisplayModes(a, b, this, EnumDisplayModesCallback);
+		log("*", result);
 		return result;
 	}
 	STDMETHOD(EnumSurfaces)(THIS_ DWORD, LPDDSURFACEDESC, LPVOID, LPDDENUMSURFACESCALLBACK) {
@@ -440,16 +478,137 @@ struct DirectDrawProxy : public IDirectDraw2
 	}
 	STDMETHOD(GetCaps)(THIS_ LPDDCAPS a, LPDDCAPS b) {
 		DDRAW_PROXY(GetCaps);
-		proxy_log(">", a, b);
+		log(">", a, b);
 		auto result = dd2->GetCaps(a, b);
-		proxy_log("*", result);
+		if (a) log_flags("a->dwCaps", {
+			FLAG(DDCAPS_3D),
+			FLAG(DDCAPS_ALIGNBOUNDARYDEST),
+			FLAG(DDCAPS_ALIGNBOUNDARYSRC),
+			FLAG(DDCAPS_ALIGNSIZEDEST),
+			FLAG(DDCAPS_ALIGNSIZESRC),
+			FLAG(DDCAPS_ALIGNSTRIDE),
+			FLAG(DDCAPS_ALPHA),
+			FLAG(DDCAPS_BANKSWITCHED),
+			FLAG(DDCAPS_BLT),
+			FLAG(DDCAPS_BLTCOLORFILL),
+			FLAG(DDCAPS_BLTDEPTHFILL),
+			FLAG(DDCAPS_BLTFOURCC),
+			FLAG(DDCAPS_BLTQUEUE),
+			FLAG(DDCAPS_BLTSTRETCH),
+			FLAG(DDCAPS_CANBLTSYSMEM),
+			FLAG(DDCAPS_CANCLIP),
+			FLAG(DDCAPS_CANCLIPSTRETCHED),
+			FLAG(DDCAPS_COLORKEY),
+			FLAG(DDCAPS_COLORKEYHWASSIST),
+			FLAG(DDCAPS_GDI),
+			FLAG(DDCAPS_NOHARDWARE),
+			FLAG(DDCAPS_OVERLAY),
+			FLAG(DDCAPS_OVERLAYCANTCLIP),
+			FLAG(DDCAPS_OVERLAYFOURCC),
+			FLAG(DDCAPS_OVERLAYSTRETCH),
+			FLAG(DDCAPS_PALETTE),
+			FLAG(DDCAPS_PALETTEVSYNC),
+			FLAG(DDCAPS_READSCANLINE),
+			FLAG(DDCAPS_VBI),
+			FLAG(DDCAPS_ZBLTS),
+			FLAG(DDCAPS_ZOVERLAYS),
+		}, a->dwCaps);
+		if (a) log_flags("a->dwCaps2", {
+			FLAG(DDCAPS2_AUTOFLIPOVERLAY),
+			FLAG(DDCAPS2_CANBOBHARDWARE),
+			FLAG(DDCAPS2_CANBOBINTERLEAVED),
+			FLAG(DDCAPS2_CANBOBNONINTERLEAVED),
+			FLAG(DDCAPS2_CANCALIBRATEGAMMA),
+			FLAG(DDCAPS2_CANDROPZ16BIT),
+			FLAG(DDCAPS2_CANFLIPODDEVEN),
+			FLAG(DDCAPS2_CANMANAGETEXTURE),
+			FLAG(DDCAPS2_CANRENDERWINDOWED),
+			FLAG(DDCAPS2_CERTIFIED),
+			FLAG(DDCAPS2_COLORCONTROLPRIMARY),
+			FLAG(DDCAPS2_COLORCONTROLOVERLAY),
+			FLAG(DDCAPS2_COPYFOURCC),
+			FLAG(DDCAPS2_FLIPINTERVAL),
+			FLAG(DDCAPS2_FLIPNOVSYNC),
+			FLAG(DDCAPS2_NO2DDURING3DSCENE),
+			FLAG(DDCAPS2_NONLOCALVIDMEM),
+			FLAG(DDCAPS2_NONLOCALVIDMEMCAPS),
+			FLAG(DDCAPS2_NOPAGELOCKREQUIRED),
+			FLAG(DDCAPS2_PRIMARYGAMMA),
+			FLAG(DDCAPS2_STEREO),
+			FLAG(DDCAPS2_TEXMANINNONLOCALVIDMEM),
+			FLAG(DDCAPS2_VIDEOPORT),
+			FLAG(DDCAPS2_WIDESURFACES),
+		}, a->dwCaps2);
+		if (b) log_flags("b->dwCaps", {
+			FLAG(DDCAPS_3D),
+			FLAG(DDCAPS_ALIGNBOUNDARYDEST),
+			FLAG(DDCAPS_ALIGNBOUNDARYSRC),
+			FLAG(DDCAPS_ALIGNSIZEDEST),
+			FLAG(DDCAPS_ALIGNSIZESRC),
+			FLAG(DDCAPS_ALIGNSTRIDE),
+			FLAG(DDCAPS_ALPHA),
+			FLAG(DDCAPS_BANKSWITCHED),
+			FLAG(DDCAPS_BLT),
+			FLAG(DDCAPS_BLTCOLORFILL),
+			FLAG(DDCAPS_BLTDEPTHFILL),
+			FLAG(DDCAPS_BLTFOURCC),
+			FLAG(DDCAPS_BLTQUEUE),
+			FLAG(DDCAPS_BLTSTRETCH),
+			FLAG(DDCAPS_CANBLTSYSMEM),
+			FLAG(DDCAPS_CANCLIP),
+			FLAG(DDCAPS_CANCLIPSTRETCHED),
+			FLAG(DDCAPS_COLORKEY),
+			FLAG(DDCAPS_COLORKEYHWASSIST),
+			FLAG(DDCAPS_GDI),
+			FLAG(DDCAPS_NOHARDWARE),
+			FLAG(DDCAPS_OVERLAY),
+			FLAG(DDCAPS_OVERLAYCANTCLIP),
+			FLAG(DDCAPS_OVERLAYFOURCC),
+			FLAG(DDCAPS_OVERLAYSTRETCH),
+			FLAG(DDCAPS_PALETTE),
+			FLAG(DDCAPS_PALETTEVSYNC),
+			FLAG(DDCAPS_READSCANLINE),
+			FLAG(DDCAPS_VBI),
+			FLAG(DDCAPS_ZBLTS),
+			FLAG(DDCAPS_ZOVERLAYS),
+		}, b->dwCaps);
+		if (b) log_flags("b->dwCaps2", {
+			FLAG(DDCAPS2_AUTOFLIPOVERLAY),
+			FLAG(DDCAPS2_CANBOBHARDWARE),
+			FLAG(DDCAPS2_CANBOBINTERLEAVED),
+			FLAG(DDCAPS2_CANBOBNONINTERLEAVED),
+			FLAG(DDCAPS2_CANCALIBRATEGAMMA),
+			FLAG(DDCAPS2_CANDROPZ16BIT),
+			FLAG(DDCAPS2_CANFLIPODDEVEN),
+			FLAG(DDCAPS2_CANMANAGETEXTURE),
+			FLAG(DDCAPS2_CANRENDERWINDOWED),
+			FLAG(DDCAPS2_CERTIFIED),
+			FLAG(DDCAPS2_COLORCONTROLPRIMARY),
+			FLAG(DDCAPS2_COLORCONTROLOVERLAY),
+			FLAG(DDCAPS2_COPYFOURCC),
+			FLAG(DDCAPS2_FLIPINTERVAL),
+			FLAG(DDCAPS2_FLIPNOVSYNC),
+			FLAG(DDCAPS2_NO2DDURING3DSCENE),
+			FLAG(DDCAPS2_NONLOCALVIDMEM),
+			FLAG(DDCAPS2_NONLOCALVIDMEMCAPS),
+			FLAG(DDCAPS2_NOPAGELOCKREQUIRED),
+			FLAG(DDCAPS2_PRIMARYGAMMA),
+			FLAG(DDCAPS2_STEREO),
+			FLAG(DDCAPS2_TEXMANINNONLOCALVIDMEM),
+			FLAG(DDCAPS2_VIDEOPORT),
+			FLAG(DDCAPS2_WIDESURFACES),
+		}, b->dwCaps2);
+
+		log("*", result);
 		return result;
 	}
 	STDMETHOD(GetDisplayMode)(THIS_ LPDDSURFACEDESC a) {
 		DDRAW_PROXY(GetDisplayMode);
-		proxy_log(">", a);
+		log(">", a);
 		auto result = dd2->GetDisplayMode(a);
-		proxy_log("*", result);
+		a->dwWidth = 640, a->dwHeight = 480;
+		log_ddsd(a);
+		log("*", result);
 		return result;
 	}
 	STDMETHOD(GetFourCCCodes)(THIS_  LPDWORD, LPDWORD) {
@@ -505,20 +664,28 @@ struct DirectDrawProxy : public IDirectDraw2
 
 	STDMETHOD(SetCooperativeLevel)(THIS_ HWND hWnd, DWORD flags) {
 		DDRAW_PROXY(SetCooperativeLevel);
-		proxy_log(hWnd, flags);
+
+		log("hWnd =", hWnd);
+		log_flags("flags", { 
+			FLAG(DDSCL_FULLSCREEN),
+			FLAG(DDSCL_ALLOWREBOOT),
+			FLAG(DDSCL_NOWINDOWCHANGES),
+			FLAG(DDSCL_NORMAL)	
+		}, flags);
+
 #if _DDSCL_NORMAL
 		flags = DDSCL_NORMAL;
 #endif
 		auto result = dd2->SetCooperativeLevel(hWnd, flags);
-		proxy_log("*", result);
+		log("*", result);
 		return result;
 	}
 	STDMETHOD(SetDisplayMode)(THIS_ DWORD w, DWORD h, DWORD c, DWORD d, DWORD e) {
 		DDRAW_PROXY(SetDisplayMode);
-		proxy_log(">", w, h, c, d);
+		log(">", w, h, c, d);
 		w = 1920, h = 1080;
 		auto result = dd2->SetDisplayMode(w, h, c, d, e);
-		proxy_log("*", result);
+		log("*", result);
 		return result;
 	}
 	STDMETHOD(WaitForVerticalBlank)(THIS_ DWORD a, HANDLE b) {
@@ -536,16 +703,16 @@ PROXY_EXPORTS IDirectDraw *DirectDrawProxyCreate(IDirectDraw *dd) {
 	return (IDirectDraw *)new DirectDrawProxy(dd);
 }
 
-std::ofstream proxy_log_file;
+std::ofstream log_file;
 
 int proxy_init() {
-	proxy_log_file.open("proxy_log.txt");
-	proxy_log_file.rdbuf()->pubsetbuf(0, 0);
+	log_file.open("log.txt");
+	log_file.rdbuf()->pubsetbuf(0, 0);
 	return 0;
 }
 
 int _ = proxy_init();
 
 PROXY_EXPORTS void *ProxyLog() {
-	return &proxy_log_file;
+	return &log_file;
 }

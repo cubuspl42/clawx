@@ -9,8 +9,7 @@
 #include <stack>
 #include <vector>
 
-unsigned short thread_number;
-thread_local unsigned short thread_index;
+#include <windows.h>
 
 bool contains(std::string str, std::string substr) {
 	return str.find(substr) != std::string::npos;
@@ -45,19 +44,53 @@ void log_r(std::ofstream &os, T head, Tail&&... tail) {
 
 template<typename... Args>
 void log_t(std::ofstream &os, Args&&... args) {
-	os << GetCurrentThreadId() << '/' << current_time() << ' ';
+	os << current_time() << ' ';
 	log_r(os, std::forward<Args>(args)...);
 }
 
 template<typename... Args>
-void proxy_log(Args&&... args) {
-	log(*((std::ofstream*)ProxyLog()), std::forward<Args>(args)...);
+void log(Args&&... args) {
+	log_t(*((std::ofstream*)ProxyLog()), std::forward<Args>(args)...);
 }
 
-void proxy_log_unimplemented() {
-	proxy_log(DLL_NAME, "<unimplemented>");
+void log_unimplemented() {
+	log(DLL_NAME, "<unimplemented>");
 }
 
-#define PROXY(symbol) proxy_log(DLL_NAME, #symbol);
+void log_hresult(HRESULT r) {
+	switch (r) {
+	case S_OK: log("r = S_OK"); break;
+	default: log("r =", r); break;
+	}
+}
 
-#define PROXY_UNIMPLEMENTED() (proxy_log_unimplemented(), 0)
+template<typename... Args>
+void log_in(Args&&... args) {
+	log(">", std::forward<Args>(args)...);
+}
+
+template<typename... Args>
+void log_out(Args&&... args) {
+	log("<", std::forward<Args>(args)...);
+}
+
+void log_flags(std::string fn, std::vector<std::pair<unsigned, std::string>> fdef, unsigned f) {
+	fn += " = ";
+	int i = 0;
+	for (auto &p : fdef) {
+		if (f & p.first) {
+			if (i) {
+				fn += " | ";
+			}
+			fn += p.second;
+			++i;
+		}
+	}
+	log(fn);
+}
+
+#define FLAG(flag) {flag, #flag}
+
+#define PROXY(symbol) log(DLL_NAME, #symbol);
+
+#define PROXY_UNIMPLEMENTED() (log_unimplemented(), 0)
