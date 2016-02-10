@@ -10,6 +10,13 @@
 #define PROXY_EXPORTS __declspec(dllimport)
 #endif
 
-PROXY_EXPORTS IDirectDraw *DirectDrawProxyCreate(IDirectDraw *);
+using DirectDrawCreatePtr = decltype(&DirectDrawCreate);
+
+PROXY_EXPORTS HRESULT DirectDrawProxyCreate(
+	DirectDrawCreatePtr _DirectDrawCreate,
+	GUID *lpGUID,
+	LPDIRECTDRAW *lplpDD,
+	IUnknown     *pUnkOuter
+);
 
 PROXY_EXPORTS void *ProxyLog();
