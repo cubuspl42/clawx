@@ -2208,9 +2208,15 @@ extern "C" HWND WINAPI __E__112__(
 
 	F _CreateWindowExA = (F)p[112];
 
-	dwExStyle = 0;
-	dwStyle = 0;
-	nWidth = 640, nHeight = 480;
+	nWidth = config["CreateWindowExA_nWidth"];
+	nHeight = config["CreateWindowExA_nHeight"];
+
+	bool disable_style = config["CreateWindowExA_disable_style"];
+
+	if (disable_style) {
+		dwExStyle = 0;
+		dwStyle = 0;
+	}
 
 	auto result = _CreateWindowExA(dwExStyle, lpClassName, lpWindowName, dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
 

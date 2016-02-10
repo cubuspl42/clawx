@@ -3,6 +3,14 @@
 #include "proxy.h"
 #include "dump.h"
 
+#include "json.hpp"
+
+using json = nlohmann::json;
+
+const unsigned MAGIC = 0x1a1b1c00;
+
+bool DISABLE_PROXY = false;
+
 template<typename T>
 size_t h(const T* ptr) {
 	const char *c = (const char *)ptr;
@@ -15,9 +23,21 @@ size_t h(const T* ptr) {
 	return seed;
 }
 
-const bool DISABLE_PROXY = true;
+auto make_fdef(std::vector<std::pair<unsigned, std::string>> fdef) {
+	return fdef;
+}
 
-const unsigned MAGIC = 0x1a1b1c00;
+unsigned set_flags(std::vector<std::pair<unsigned, std::string>> fdef, std::vector<std::string> flags) {
+	unsigned f = 0;
+	for (auto fi : flags) {
+		for (auto &p : fdef) {
+			if (fi == p.second) {
+				f |= p.first;
+			}
+		}
+	}
+	return f;
+}
 
 #define DDRAW_PALETTE_PROXY(method) log("DirectDrawPaletteProxy", #method);
 
@@ -332,11 +352,11 @@ public:
 		DDRAW_SURFACE_PROXY(GetDC);
 
 		if (DISABLE_PROXY) {
-			*a = (HDC)1;
-			return S_OK;
+			return dds3()->GetDC(a);
 		}
 		else {
-			return dds3()->GetDC(a);
+			*a = (HDC)1;
+			return S_OK;
 		}
 	}
 	STDMETHOD(GetFlipStatus)(THIS_ DWORD) {
@@ -374,6 +394,14 @@ public:
 
 			log_ddsd(&ddsd);
 			log_ddsd(a);
+
+			if (ddsd.dwBackBufferCount) {
+				int w = config["GetSurfaceDesc_backbuffer_w"];
+				int h = config["GetSurfaceDesc_backbuffer_h"];
+
+				a->dwWidth = w;
+				a->dwHeight = h;
+			}
 
 			return result;
 		}
@@ -751,6 +779,15 @@ struct DirectDrawProxy : public IDirectDraw2
 
 		if (DISABLE_PROXY) {
 			auto result = dd2->GetDisplayMode(a);
+
+			int w = config["GetDisplayMode_w"];
+			int h = config["GetDisplayMode_h"];
+
+			log_out(w, h);
+
+			a->dwWidth = w;
+			a->dwHeight = h;
+
 			log_hresult(result);
 			return result;
 		}
@@ -785,20 +822,31 @@ struct DirectDrawProxy : public IDirectDraw2
 	}
 	STDMETHOD(RestoreDisplayMode)(THIS) {
 		DDRAW_PROXY(RestoreDisplayMode);
-		return dd2->RestoreDisplayMode();
+		if (DISABLE_PROXY) {
+			return dd2->RestoreDisplayMode();
+		}
+		else {
+			return S_OK;
+		}
 	}
 	STDMETHOD(SetCooperativeLevel)(THIS_ HWND hWnd, DWORD flags) {
 		DDRAW_PROXY(SetCooperativeLevel);
 
-		log("hWnd =", hWnd);
-		log_flags("flags", { 
+		auto fdef = make_fdef({
 			FLAG(DDSCL_FULLSCREEN),
 			FLAG(DDSCL_ALLOWREBOOT),
 			FLAG(DDSCL_NOWINDOWCHANGES),
-			FLAG(DDSCL_NORMAL)	
-		}, flags);
+			FLAG(DDSCL_NORMAL)
+		});
+
+		log("hWnd =", hWnd);
+		log_flags("flags", fdef, flags);
 
 		if (DISABLE_PROXY) {
+			std::vector<std::string> SetCooperativeLevel_flags = config["SetCooperativeLevel_flags"];
+
+			// flags = set_flags(fdef, SetCooperativeLevel_flags);
+
 			auto result = dd2->SetCooperativeLevel(hWnd, flags);
 
 			log_hresult(result);
@@ -812,7 +860,9 @@ struct DirectDrawProxy : public IDirectDraw2
 	STDMETHOD(SetDisplayMode)(THIS_ DWORD w, DWORD h, DWORD c, DWORD d, DWORD e) {
 		DDRAW_PROXY(SetDisplayMode);
 		log(">", w, h, c, d);
-		w = 1920, h = 1080;
+
+		w = config["SetDisplayMode_w"];
+		h = config["SetDisplayMode_h"];
 
 		if (DISABLE_PROXY) {
 			auto result = dd2->SetDisplayMode(w, h, c, d, e);
@@ -860,10 +910,18 @@ PROXY_EXPORTS HRESULT DirectDrawProxyCreate(
 }
 
 std::ofstream log_file;
+json _config;
 
 int proxy_init() {
 	log_file.open("log.txt");
 	log_file.rdbuf()->pubsetbuf(0, 0);
+
+	std::ifstream cfg_file;
+	cfg_file.open("config.json");
+	_config << cfg_file;
+
+	DISABLE_PROXY = _config["disable_proxy"];
+
 	return 0;
 }
 
@@ -871,4 +929,8 @@ int _ = proxy_init();
 
 PROXY_EXPORTS void *ProxyLog() {
 	return &log_file;
+}
+
+PROXY_EXPORTS void *Config() {
+	return &_config;
 }

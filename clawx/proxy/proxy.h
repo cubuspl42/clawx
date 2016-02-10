@@ -1,5 +1,8 @@
 #pragma once
+
 #include "log.h"
+
+#include "json.hpp"
 
 #include <windows.h>
 #include <ddraw.h>
@@ -20,3 +23,7 @@ PROXY_EXPORTS HRESULT DirectDrawProxyCreate(
 );
 
 PROXY_EXPORTS void *ProxyLog();
+
+PROXY_EXPORTS void *Config();
+
+#define config (*((nlohmann::json*)Config()))

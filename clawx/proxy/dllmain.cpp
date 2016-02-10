@@ -1,4 +1,6 @@
-// dllmain.cpp : Defines the entry point for the DLL application.
+#define DLL_NAME "PROXY"
+
+#include "proxy.h"
 
 #include <windows.h>
 
@@ -10,7 +12,10 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH: {
-		MessageBox(0, "", "", 0);
+		bool show_messagebox = config["show_messagebox"];
+
+		if(show_messagebox)
+			MessageBox(0, "", "", 0);
 	}
 		break;
 	case DLL_THREAD_ATTACH:

@@ -11,18 +11,18 @@
 
 #include <windows.h>
 
-bool contains(std::string str, std::string substr) {
+inline bool contains(std::string str, std::string substr) {
 	return str.find(substr) != std::string::npos;
 }
 
-std::string read_file(const char *path) {
+inline std::string read_file(const char *path) {
 	std::ifstream t(path);
 	std::string str((std::istreambuf_iterator<char>(t)),
 		std::istreambuf_iterator<char>());
 	return str;
 }
 
-const std::string current_time() {
+inline const std::string current_time() {
 	time_t     now = time(0);
 	struct tm  tstruct;
 	char       buf[80];
@@ -53,11 +53,11 @@ void log(Args&&... args) {
 	log_t(*((std::ofstream*)ProxyLog()), std::forward<Args>(args)...);
 }
 
-void log_unimplemented() {
+inline void log_unimplemented() {
 	log(DLL_NAME, "<unimplemented>");
 }
 
-void log_hresult(HRESULT r) {
+inline void log_hresult(HRESULT r) {
 	switch (r) {
 	case S_OK: log("r = S_OK"); break;
 	default: log("r =", r); break;
@@ -74,7 +74,7 @@ void log_out(Args&&... args) {
 	log("<", std::forward<Args>(args)...);
 }
 
-void log_flags(std::string fn, std::vector<std::pair<unsigned, std::string>> fdef, unsigned f) {
+inline void log_flags(std::string fn, std::vector<std::pair<unsigned, std::string>> fdef, unsigned f) {
 	fn += " = ";
 	int i = 0;
 	for (auto &p : fdef) {
