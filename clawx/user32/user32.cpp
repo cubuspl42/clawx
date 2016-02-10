@@ -2218,9 +2218,11 @@ extern "C" HWND WINAPI __E__112__(
 		dwStyle = 0;
 	}
 
-	auto result = _CreateWindowExA(dwExStyle, lpClassName, lpWindowName, dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+	HWND hWnd = _CreateWindowExA(dwExStyle, lpClassName, lpWindowName, dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
 
-	return result;
+	SetHwnd(hWnd);
+
+	return hWnd;
 }
 
 // CreateWindowExW

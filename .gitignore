@@ -3,6 +3,10 @@
 *.opendb
 *.filters
 *.user
+*.dll
+.vs/
+doc/
 Debug/
 Release/
 ipch/
+SFML*/

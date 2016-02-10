@@ -4,12 +4,16 @@
 #include "dump.h"
 
 #include "json.hpp"
+#include "SFML/Window.hpp"
+#include "SFML/Graphics.hpp"
 
 using json = nlohmann::json;
 
 const unsigned MAGIC = 0x1a1b1c00;
 
 bool DISABLE_PROXY = false;
+
+HWND hWnd;
 
 template<typename T>
 size_t h(const T* ptr) {
@@ -237,11 +241,18 @@ public:
 		log("bdds3 =", c);
 
 		if (DISABLE_PROXY) {
-			auto result = dds3()->Blt(a, unwrap(b), c, d, e);
+			bool Blt_enable = config["Blt_enable"];
 
-			log_hresult(result);
+			if (Blt_enable) {
+				auto result = dds3()->Blt(a, unwrap(b), c, d, e);
 
-			return result;
+				log_hresult(result);
+
+				return result;
+			}
+			else {
+				return S_OK;
+			}
 		}
 		else {
 			return S_OK;
@@ -258,11 +269,18 @@ public:
 		log("bdds3 = ", c);
 
 		if (DISABLE_PROXY) {
-			auto result = dds3()->BltFast(a, b, unwrap(c), d, e);
+			bool BltFast_enable = config["BltFast_enable"];
 
-			log_hresult(result);
+			if (BltFast_enable) {
+				auto result = dds3()->BltFast(a, b, unwrap(c), d, e);
 
-			return result;
+				log_hresult(result);
+
+				return result;
+			}
+			else {
+				return S_OK;
+			}
 		}
 		else {
 			return S_OK;
@@ -608,7 +626,12 @@ struct DirectDrawProxy : public IDirectDraw2
 	IDirectDraw *dd = nullptr;
 	IDirectDraw2 *dd2 = nullptr;
 
+	sf::RenderWindow window;
+
 	DirectDrawProxy(IDirectDraw *dd) {
+		window.create(hWnd);
+		window.clear(sf::Color::Black);
+		window.display();
 		this->dd = dd;
 	}
 
@@ -926,6 +949,10 @@ int proxy_init() {
 }
 
 int _ = proxy_init();
+
+PROXY_EXPORTS void SetHwnd(HWND _hWnd) {
+	hWnd = _hWnd;
+}
 
 PROXY_EXPORTS void *ProxyLog() {
 	return &log_file;

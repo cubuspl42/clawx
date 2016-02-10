@@ -14,7 +14,7 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 {
 	if (reason == DLL_PROCESS_ATTACH)
 	{
-		log(DLL_NAME, "DLL_PROCESS_ATTACH");
+		//log(DLL_NAME, "DLL_PROCESS_ATTACH");
 
 		hLThis = hInst;
 		hL = LoadLibrary("C:\\Windows\\System32\\DDRAW.DLL");

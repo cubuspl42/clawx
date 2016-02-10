@@ -22,6 +22,8 @@ PROXY_EXPORTS HRESULT DirectDrawProxyCreate(
 	IUnknown     *pUnkOuter
 );
 
+PROXY_EXPORTS void SetHwnd(HWND hWnd);
+
 PROXY_EXPORTS void *ProxyLog();
 
 PROXY_EXPORTS void *Config();
