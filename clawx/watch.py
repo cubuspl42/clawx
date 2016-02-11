@@ -5,6 +5,7 @@ from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
 
 src = r"D:\data\code\github\clawx\clawx\Debug"
+src_release = r"D:\data\code\github\clawx\clawx\Release"
 dest = r"D:\My Games\Clawx"
 
 class MyHandler(PatternMatchingEventHandler):
@@ -27,6 +28,7 @@ class MyHandler(PatternMatchingEventHandler):
 if __name__ == '__main__':
     observer = Observer()
     observer.schedule(MyHandler(), path=src)
+    observer.schedule(MyHandler(), path=src_release)
     observer.start()
 
     try:

@@ -1,11 +1,13 @@
 #pragma once
 
-#include "log.h"
+#include <windows.h>
+#include <ddraw.h>
 
 #include "json.hpp"
 
-#include <windows.h>
-#include <ddraw.h>
+#define config (*((nlohmann::json*)Config()))
+
+#include "log.h"
 
 #ifdef PROXY_EXPORTS
 #define PROXY_EXPORTS __declspec(dllexport)
@@ -27,5 +29,3 @@ PROXY_EXPORTS void SetHwnd(HWND hWnd);
 PROXY_EXPORTS void *ProxyLog();
 
 PROXY_EXPORTS void *Config();
-
-#define config (*((nlohmann::json*)Config()))

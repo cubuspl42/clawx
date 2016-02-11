@@ -19,6 +19,8 @@ bool DISABLE_PROXY = false;
 HWND hWnd;
 sf::RenderWindow *window;
 
+sf::RenderTexture *tempbuffer;
+
 template<typename T>
 size_t h(const T* ptr) {
 	const char *c = (const char *)ptr;
@@ -30,6 +32,8 @@ size_t h(const T* ptr) {
 	}
 	return seed;
 }
+
+void load_config();
 
 size_t h_ddsd00(DDSURFACEDESC *ddsd) {
 	DDSURFACEDESC ddsd00 = *ddsd;
@@ -196,6 +200,9 @@ public:
 
 	sf::RectangleShape shape;
 
+	bool is_frontbuffer = false;
+	bool is_backbuffer = false;
+
 	IDirectDrawSurface3 *dds3() {
 		if (!_dds3) {
 			log("_dds3 = NULL");
@@ -216,7 +223,9 @@ public:
 	void set_ddsd(LPDDSURFACEDESC ddsd) {
 		if (ddsd) {
 			this->ddsd = *ddsd;
+
 			if (ddsd->dwBackBufferCount) {
+				is_frontbuffer = true;
 				width = config["backbuffer_w"];
 				height = config["backbuffer_h"];
 			}
@@ -421,6 +430,11 @@ public:
 		log("this = ", this);
 		log("fdds3 = ", a);
 
+		static int i = 0;
+		++i;
+		if(i % 5 == 0)
+			load_config();
+
 		if (DISABLE_PROXY) {
 			auto result = dds3()->Flip(unwrap(a), b);
 
@@ -430,7 +444,11 @@ public:
 		}
 		else {
 			window->display();
-			window->clear(sf::Color::Blue);
+
+			if (config["window_clear"].get<bool>()) {
+				window->clear(sf::Color::Blue);
+
+			}
 
 			return S_OK;
 		}
@@ -463,6 +481,9 @@ public:
 			IDirectDrawSurface3 *dds = nullptr;
 			auto p = new DirectDrawSurfaceProxy(dds, &ddsd);
 			*b = p;
+
+			p->is_frontbuffer = false;
+			p->is_backbuffer = true;
 
 			log_out(p);
 
@@ -612,8 +633,8 @@ public:
 			b->dwHeight = height;
 
 			buffer.clear();
-			buffer.resize(gddsd.lPitch * height, 0xAB);
-			texture_data.resize(width * height, 0xAB);
+			buffer.resize(gddsd.lPitch * height, 0);
+			texture_data.resize(width * height, 0);
 
 			b->lpSurface = buffer.data();
 			
@@ -666,6 +687,7 @@ public:
 			return S_OK;
 		}
 	}
+#pragma optimize( "", on )
 	STDMETHOD(Unlock)(THIS_ LPVOID a) {
 		DDRAW_SURFACE_PROXY(Unlock);
 		log("this = ", this);
@@ -677,36 +699,56 @@ public:
 		else {
 			//return S_OK;
 
-			if (ddsd.dwBackBufferCount == 0) {
-				UCHAR *dst = (UCHAR *)texture_data.data();
-				UCHAR *src = (UCHAR *)buffer.data();
+			if (is_frontbuffer) {
+				// ?
+			}
+			else {
 
-				if (width > gddsd.lPitch) return S_OK;
+				if (!is_backbuffer || config["copy_backbuffer"].get<bool>()) {
+					
 
-				for (int i = 0; i < height; ++i) {
-					for (int j = 0; j < width; ++j) {
-						unsigned *px = &texture_data[i * width + j];
-						UCHAR k = buffer[i * gddsd.lPitch + j];
+					UCHAR *dst = (UCHAR *)texture_data.data();
+					UCHAR *src = (UCHAR *)buffer.data();
 
-						UCHAR *b = (UCHAR *)px;
-						b[0] = b[1] = b[2] = k;
-						b[3] = k ? 0xFF : 0;
-					};
+					if (width > gddsd.lPitch) return S_OK;
+
+					for (int i = 0; i < height; ++i) {
+						for (int j = 0; j < width; ++j) {
+							unsigned *px = &texture_data[i * width + j];
+							UCHAR k = buffer[i * gddsd.lPitch + j];
+
+							UCHAR *b = (UCHAR *)px;
+							b[0] = b[1] = b[2] = k;
+							b[3] = k ? 0xFF : 0;
+						};
+					}
+
+				}
+
+
+				if (!is_backbuffer || config["update_backbuffer"].get<bool>()) {
+					texture.update((const sf::Uint8*)texture_data.data());
+					sprite.setTexture(texture);
 				}
 				
-				texture.update((const sf::Uint8*)texture_data.data());
-				sprite.setTexture(texture);
+				
 
-				auto im = texture.copyToImage();
+				if (!is_backbuffer || config["draw_backbuffer"].get<bool>()) {
+					sprite.setPosition(0, 0);
+					window->draw(sprite);
+				}
 
-				auto filename = "b/" + std::to_string(h(&gddsd)) + ".png";
-				im.saveToFile(filename);
+				//auto im = texture.copyToImage();
+
+				//auto filename = "b/" + std::to_string(h(&gddsd)) + ".png";
+				//im.saveToFile(filename);
 
 				//stbi_write_png(filename.c_str(), width, height, 4, texture_data.data(), width);
 			}
 			return S_OK;
 		}
 	}
+#pragma optimize( "", off )
 	STDMETHOD(UpdateOverlay)(THIS_ LPRECT, LPDIRECTDRAWSURFACE3, LPRECT, DWORD, LPDDOVERLAYFX) {
 		DDRAW_SURFACE_PROXY(UpdateOverlay);
 		return PROXY_UNIMPLEMENTED();
@@ -1116,13 +1158,18 @@ PROXY_EXPORTS HRESULT DirectDrawProxyCreate(
 std::ofstream log_file;
 json _config;
 
+void load_config() {
+	std::ifstream cfg_file;
+	cfg_file.open("config.json");
+	_config << cfg_file;
+	cfg_file.close();
+}
+
 int proxy_init() {
 	log_file.open("log.txt");
 	//log_file.rdbuf()->pubsetbuf(0, 0);
 
-	std::ifstream cfg_file;
-	cfg_file.open("config.json");
-	_config << cfg_file;
+	load_config();
 
 	DISABLE_PROXY = _config["disable_proxy"];
 
@@ -1142,6 +1189,8 @@ int _ = proxy_init();
 PROXY_EXPORTS void SetHwnd(HWND _hWnd) {
 	hWnd = _hWnd;
 	window = new sf::RenderWindow();
+	tempbuffer = new sf::RenderTexture();
+	tempbuffer->create(config["backbuffer_w"], config["backbuffer_h"]);
 }
 
 PROXY_EXPORTS void *ProxyLog() {
