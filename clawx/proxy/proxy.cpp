@@ -159,7 +159,20 @@ void log_ddsd(LPDDSURFACEDESC ddsd) {
 	log(ddsd->lPitch, ddsd->ddpfPixelFormat.dwRGBBitCount);
 }
 
-std::vector<UCHAR> buffer(1920 * 1080 * 32);
+void log_fx(LPDDBLTFX bltfx) {
+	log_flags("bltfx->dwDDFX", {
+		FLAG(DDBLTFX_ARITHSTRETCHY),
+		FLAG(DDBLTFX_MIRRORLEFTRIGHT),
+		FLAG(DDBLTFX_MIRRORUPDOWN),
+		FLAG(DDBLTFX_NOTEARING),
+		FLAG(DDBLTFX_ROTATE180),
+		FLAG(DDBLTFX_ROTATE270),
+		FLAG(DDBLTFX_ROTATE90),
+		FLAG(DDBLTFX_ZBUFFERBASEDEST),
+		FLAG(DDBLTFX_ZBUFFERRANGE)
+	}, bltfx->dwDDFX);
+}
+
 std::vector<unsigned> pal(256);
 
 class DirectDrawSurfaceProxy : public IDirectDrawSurface3
@@ -192,6 +205,8 @@ public:
 	int height = -1;
 	std::vector<UCHAR> surface_mem;
 	std::vector<unsigned> texture_data;
+	std::vector<UCHAR> buffer;
+
 	sf::Texture texture;
 	sf::Sprite sprite;
 
@@ -234,12 +249,8 @@ public:
 				height = ddsd->dwHeight;
 			}
 
-				texture.create(width, height);
+			texture.create(width, height);
 			
-				texture2.loadFromFile("FRAME001.png");
-				sprite2.setTexture(texture2);
-
-
 
 #if 0
 
@@ -310,11 +321,33 @@ public:
 		DDRAW_SURFACE_PROXY(AddOverlayDirtyRect);
 		return PROXY_UNIMPLEMENTED();
 	}
-	STDMETHOD(Blt)(THIS_ LPRECT a, LPDIRECTDRAWSURFACE3 b, LPRECT c, DWORD d, LPDDBLTFX e) {
+	STDMETHOD(Blt)(
+		 LPRECT               lpDestRect,
+		 LPDIRECTDRAWSURFACE3 lpDDSrcSurface,
+		 LPRECT               lpSrcRect,
+		 DWORD                dwFlags,
+		 LPDDBLTFX            lpDDBltFx
+	) {
+		auto a = lpDestRect;
+		auto b = lpDDSrcSurface;
+		auto c = lpSrcRect;
+		auto d = dwFlags;
+		auto e = lpDDBltFx;
+
 		DDRAW_SURFACE_PROXY(Blt);
 
 		log("this =", this);
 		log("bdds3 =", c);
+		if (lpDestRect) {
+			log("lpDestRect:", lpDestRect->left, lpDestRect->top);
+
+		}
+		if (lpSrcRect) {
+			log("lpSrcRect:", lpSrcRect->left, lpSrcRect->top);
+		}
+
+		if(lpDDBltFx)
+			log_fx(lpDDBltFx);
 
 		if (DISABLE_PROXY) {
 			bool Blt_enable = config["Blt_enable"];
@@ -331,7 +364,22 @@ public:
 			}
 		}
 		else {
-			if (!a) return S_OK;
+			if (!lpDDSrcSurface) {
+				log("Blt: lpDDSrcSurface == NULL");
+				return S_OK;
+			}
+			int x = 0;
+			int y = 0;
+
+			if (a) {
+				x = a->left;
+				y = a->top;
+			}
+
+			if (lpSrcRect) {
+				x += lpSrcRect->left;
+				y += lpSrcRect->top;
+			}
 
 #if 0
 			shape.setPosition(a->left, a->top);
@@ -345,18 +393,12 @@ public:
 			window->draw(shape);
 #endif
 
-			return S_OK;
+			DirectDrawSurfaceProxy *ddsd = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
+			auto &sprite = ddsd->sprite;
 
+			sprite.setPosition(x, y);
 
-			sprite.setPosition(a->left, a->top);
-			sprite2.setPosition(a->left, a->top);
-
-			if (width > gddsd.lPitch) return S_OK;
-			if (ddsd.dwBackBufferCount) return S_OK;
-
-	
 			window->draw(sprite);
-			//window->draw(sprite2);
 
 			return S_OK;
 		}
@@ -365,11 +407,27 @@ public:
 		DDRAW_SURFACE_PROXY(BltBatch);
 		return PROXY_UNIMPLEMENTED();
 	}
-	STDMETHOD(BltFast)(THIS_ DWORD a, DWORD b, LPDIRECTDRAWSURFACE3 c, LPRECT d, DWORD e) {
+	STDMETHOD(BltFast)(THIS_
+		DWORD                dwX,
+		DWORD                dwY,
+		LPDIRECTDRAWSURFACE3 lpDDSrcSurface,
+		LPRECT               lpSrcRect,
+		DWORD                dwFlags
+	) {
+
+		auto a = dwX;
+		auto b = dwY;
+		auto c = lpDDSrcSurface;
+		auto d = lpSrcRect;
+		auto e = dwFlags;
+		//auto f = lpDDBltFx;
+
 		DDRAW_SURFACE_PROXY(BltFast);
 
 		log("this = ", this);
 		log("bdds3 = ", c);
+		log("x y:", dwX, dwY);
+		//log_fx(lpDDBltFx);
 
 		if (DISABLE_PROXY) {
 			bool BltFast_enable = config["BltFast_enable"];
@@ -388,14 +446,16 @@ public:
 		else {
 			//if (!a) return S_OK;
 
-#if 0
-			shape.setPosition(a, b);
-			shape.setSize(sf::Vector2f(d->right - d->left, d->bottom - d->top));
-			shape.setOutlineColor(sf::Color::Red);
-			shape.setOutlineThickness(1);
+			if (config["draw_rects"].get<bool>()) {
+				shape.setPosition(a, b);
+				shape.setSize(sf::Vector2f(d->right - d->left, d->bottom - d->top));
+				shape.setOutlineColor(sf::Color::Red);
+				shape.setOutlineThickness(1);
 
-			window->draw(shape);
-#endif
+				window->draw(shape);
+			}
+		
+
 			DirectDrawSurfaceProxy *ddsd = (DirectDrawSurfaceProxy *)c;
 			auto &sprite = ddsd->sprite;
 
@@ -446,7 +506,8 @@ public:
 			window->display();
 
 			if (config["window_clear"].get<bool>()) {
-				window->clear(sf::Color::Blue);
+				
+				window->clear(sf::Color(rand()));
 
 			}
 
@@ -633,7 +694,7 @@ public:
 			b->dwHeight = height;
 
 			buffer.clear();
-			buffer.resize(gddsd.lPitch * height, 0);
+			buffer.resize(gddsd.lPitch * height * 4, 0);
 			texture_data.resize(width * height, 0);
 
 			b->lpSurface = buffer.data();
@@ -687,7 +748,7 @@ public:
 			return S_OK;
 		}
 	}
-#pragma optimize( "", on )
+
 	STDMETHOD(Unlock)(THIS_ LPVOID a) {
 		DDRAW_SURFACE_PROXY(Unlock);
 		log("this = ", this);
@@ -699,10 +760,6 @@ public:
 		else {
 			//return S_OK;
 
-			if (is_frontbuffer) {
-				// ?
-			}
-			else {
 
 				if (!is_backbuffer || config["copy_backbuffer"].get<bool>()) {
 					
@@ -719,7 +776,8 @@ public:
 
 							UCHAR *b = (UCHAR *)px;
 							b[0] = b[1] = b[2] = k;
-							b[3] = k ? 0xFF : 0;
+							//b[3] = k ? 0xFF : 0;
+							b[3] = 64;
 						};
 					}
 
@@ -744,11 +802,11 @@ public:
 				//im.saveToFile(filename);
 
 				//stbi_write_png(filename.c_str(), width, height, 4, texture_data.data(), width);
-			}
+			
 			return S_OK;
 		}
 	}
-#pragma optimize( "", off )
+
 	STDMETHOD(UpdateOverlay)(THIS_ LPRECT, LPDIRECTDRAWSURFACE3, LPRECT, DWORD, LPDDOVERLAYFX) {
 		DDRAW_SURFACE_PROXY(UpdateOverlay);
 		return PROXY_UNIMPLEMENTED();
@@ -843,6 +901,39 @@ void log_caps(LPDDCAPS ddcaps) {
 	}, ddcaps->dwCaps2);
 }
 
+void log_ddscaps(LPDDSCAPS ddscaps) {
+	log_flags("ddscaps->dwCaps", {
+		//FLAG(DDSCAPS_3D),
+		FLAG(DDSCAPS_3DDEVICE),
+		FLAG(DDSCAPS_ALLOCONLOAD),
+		FLAG(DDSCAPS_ALPHA),
+		FLAG(DDSCAPS_BACKBUFFER),
+		FLAG(DDSCAPS_COMPLEX),
+		FLAG(DDSCAPS_FLIP),
+		FLAG(DDSCAPS_FRONTBUFFER),
+		FLAG(DDSCAPS_HWCODEC),
+		FLAG(DDSCAPS_LIVEVIDEO),
+		FLAG(DDSCAPS_LOCALVIDMEM),
+		FLAG(DDSCAPS_MIPMAP),
+		FLAG(DDSCAPS_MODEX),
+		FLAG(DDSCAPS_NONLOCALVIDMEM),
+		FLAG(DDSCAPS_OFFSCREENPLAIN),
+		FLAG(DDSCAPS_OPTIMIZED),
+		FLAG(DDSCAPS_OVERLAY),
+		FLAG(DDSCAPS_OWNDC),
+		FLAG(DDSCAPS_PALETTE),
+		FLAG(DDSCAPS_PRIMARYSURFACE),
+		FLAG(DDSCAPS_STANDARDVGAMODE),
+		FLAG(DDSCAPS_SYSTEMMEMORY),
+		FLAG(DDSCAPS_TEXTURE),
+		FLAG(DDSCAPS_VIDEOMEMORY),
+		FLAG(DDSCAPS_VIDEOPORT),
+		FLAG(DDSCAPS_VISIBLE),
+		FLAG(DDSCAPS_WRITEONLY),
+		FLAG(DDSCAPS_ZBUFFER),
+	}, ddscaps->dwCaps);
+}
+
 #define DDRAW_PROXY(method) log("DirectDrawProxy", #method);
 
 struct DirectDrawProxy : public IDirectDraw2
@@ -918,7 +1009,7 @@ struct DirectDrawProxy : public IDirectDraw2
 
 		log_in(a, b, c);
 		log_in("w:", a->dwWidth, "h:", a->dwHeight, "bbc:", a->dwBackBufferCount);
-
+		log_ddscaps(&a->ddsCaps);
 		log_ddsd(a);
 
 		IDirectDrawSurface *dds = nullptr;
