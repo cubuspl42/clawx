@@ -50,7 +50,7 @@ void log_t(std::ofstream &os, Args&&... args) {
 
 template<typename... Args>
 void log(Args&&... args) {
-	//return;
+	return;
 	log_t(*((std::ofstream*)ProxyLog()), std::forward<Args>(args)...);
 }
 

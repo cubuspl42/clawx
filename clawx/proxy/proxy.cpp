@@ -7,6 +7,9 @@
 #include "SFML/Window.hpp"
 #include "SFML/Graphics.hpp"
 
+//#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 using json = nlohmann::json;
 
 const unsigned MAGIC = 0x1a1b1c00;
@@ -26,6 +29,12 @@ size_t h(const T* ptr) {
 		seed ^= j + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 	}
 	return seed;
+}
+
+size_t h_ddsd00(DDSURFACEDESC *ddsd) {
+	DDSURFACEDESC ddsd00 = *ddsd;
+	ddsd00.dwWidth = ddsd00.dwHeight = 0;
+	return h(&ddsd00);
 }
 
 auto make_fdef(std::vector<std::pair<unsigned, std::string>> fdef) {
@@ -173,6 +182,7 @@ public:
 	IDirectDrawSurface *_dds1 = nullptr;
 	IDirectDrawSurface3 *_dds3 = nullptr;
 	DDSURFACEDESC ddsd;
+	DDSURFACEDESC gddsd;
 
 	int width = -1;
 	int height = -1;
@@ -180,6 +190,10 @@ public:
 	std::vector<unsigned> texture_data;
 	sf::Texture texture;
 	sf::Sprite sprite;
+
+	sf::Texture texture2;
+	sf::Sprite sprite2;
+
 	sf::RectangleShape shape;
 
 	IDirectDrawSurface3 *dds3() {
@@ -212,14 +226,10 @@ public:
 			}
 
 				texture.create(width, height);
-				texture_data.resize(width * height);
-				for (int i = 0; i < width * height; ++i) {
-					texture_data[i] = 0x88FFFFFF;
-				}
-				texture.update((UCHAR*)texture_data.data());
-				sprite.setTexture(texture);
-						
 			
+				texture2.loadFromFile("FRAME001.png");
+				sprite2.setTexture(texture2);
+
 
 
 #if 0
@@ -326,10 +336,18 @@ public:
 			window->draw(shape);
 #endif
 
-			sprite.setPosition(a->left, a->top);
+			return S_OK;
 
-			if(ddsd.dwBackBufferCount == 0)
-				window->draw(sprite);
+
+			sprite.setPosition(a->left, a->top);
+			sprite2.setPosition(a->left, a->top);
+
+			if (width > gddsd.lPitch) return S_OK;
+			if (ddsd.dwBackBufferCount) return S_OK;
+
+	
+			window->draw(sprite);
+			//window->draw(sprite2);
 
 			return S_OK;
 		}
@@ -369,10 +387,17 @@ public:
 
 			window->draw(shape);
 #endif
-			sprite.setPosition(a, b);
+			DirectDrawSurfaceProxy *ddsd = (DirectDrawSurfaceProxy *)c;
+			auto &sprite = ddsd->sprite;
 
-			if (ddsd.dwBackBufferCount == 0)
-				window->draw(sprite);
+			sprite.setPosition(a, b);
+			//sprite2.setPosition(a, b);
+
+
+			//if (c->dwBackBufferCount) return S_OK;
+
+			window->draw(sprite);
+			//window->draw(sprite2);
 
 			return S_OK;
 		}
@@ -405,8 +430,8 @@ public:
 		}
 		else {
 			window->display();
-			Sleep(8);
-			window->clear();
+			window->clear(sf::Color::Blue);
+
 			return S_OK;
 		}
 	}
@@ -504,6 +529,10 @@ public:
 			auto result = dds3()->GetSurfaceDesc(a);
 			Dump(s, a);
 
+			if (ddsd.dwWidth > 512 && ddsd.dwWidth < 640) {
+				int x = 0;
+			}
+
 			log_ddsd(&ddsd);
 			log_ddsd(a);
 
@@ -523,7 +552,12 @@ public:
 				a->dwWidth = ddsd.dwWidth;
 				a->dwHeight = ddsd.dwHeight;
 			}
-			a->lPitch = width;
+
+			gddsd = *a;
+			
+			log_ddsd(&ddsd);
+			log_ddsd(a);
+
 			return S_OK;
 		}
 	}
@@ -548,19 +582,39 @@ public:
 
 		if (DISABLE_PROXY) {
 			auto result = dds3()->Lock(a, b, c, d);
+
+
 			if (b->lpSurface) {
 				log("lpSurface:", b->lpSurface);
 			}
 			else {
 				log("lpSurface: NULL");
 			}
+
+			DDSURFACEDESC x = ddsd;
+			x.dwWidth = x.dwHeight = 0;
+			x.lpSurface = 0;
+			//log("h(&y)", h(&x));
+			//log("h(&x)", h(&x));
+
+			Dump("Lock_" + std::to_string(h(&x)), b);
+
 			return result;
 		}
 		else {
-			log_ddsd(&ddsd);
-			*b = ddsd;
+			DDSURFACEDESC x = ddsd;
+			x.dwWidth = x.dwHeight = 0;
+			x.lpSurface = 0;
+			//log("h(&y)", h(&x));
 
-			buffer.resize(buffer.size(), 0xAB);
+			Load("Lock_" + std::to_string(h(&x)), b);
+			b->dwWidth = width;
+			b->dwHeight = height;
+
+			buffer.clear();
+			buffer.resize(gddsd.lPitch * height, 0xAB);
+			texture_data.resize(width * height, 0xAB);
+
 			b->lpSurface = buffer.data();
 			
 			return S_OK;
@@ -621,24 +675,35 @@ public:
 			return result;
 		}
 		else {
-			return S_OK;
+			//return S_OK;
 
 			if (ddsd.dwBackBufferCount == 0) {
-				for (int i = 0; i < width * height; ++i) {
-					UCHAR j = buffer[i];
-					texture_data[i] = pal[j];
-					UCHAR *px = (UCHAR *)(texture_data.data() + i);
-					
+				UCHAR *dst = (UCHAR *)texture_data.data();
+				UCHAR *src = (UCHAR *)buffer.data();
 
-					texture_data[i] = 0xFFFFFFFF;
+				if (width > gddsd.lPitch) return S_OK;
+
+				for (int i = 0; i < height; ++i) {
+					for (int j = 0; j < width; ++j) {
+						unsigned *px = &texture_data[i * width + j];
+						UCHAR k = buffer[i * gddsd.lPitch + j];
+
+						UCHAR *b = (UCHAR *)px;
+						b[0] = b[1] = b[2] = k;
+						b[3] = k ? 0xFF : 0;
+					};
 				}
+				
 				texture.update((const sf::Uint8*)texture_data.data());
-				auto im = texture.copyToImage();
-				static int i = 0;
-				im.saveToFile("a/" + std::to_string(i++) + ".png");
 				sprite.setTexture(texture);
-			}
 
+				auto im = texture.copyToImage();
+
+				auto filename = "b/" + std::to_string(h(&gddsd)) + ".png";
+				im.saveToFile(filename);
+
+				//stbi_write_png(filename.c_str(), width, height, 4, texture_data.data(), width);
+			}
 			return S_OK;
 		}
 	}
@@ -745,7 +810,8 @@ struct DirectDrawProxy : public IDirectDraw2
 
 	DirectDrawProxy(IDirectDraw *dd) {
 		window->create(hWnd);
-		window->clear(sf::Color::Black);
+		window->setVerticalSyncEnabled(true);
+		window->clear(sf::Color::Red);
 		window->display();
 		this->dd = dd;
 	}
