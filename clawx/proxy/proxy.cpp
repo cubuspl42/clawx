@@ -14,6 +14,7 @@ const unsigned MAGIC = 0x1a1b1c00;
 bool DISABLE_PROXY = false;
 
 HWND hWnd;
+sf::RenderWindow *window;
 
 template<typename T>
 size_t h(const T* ptr) {
@@ -142,10 +143,11 @@ void log_ddsd(LPDDSURFACEDESC ddsd) {
 		FLAG(DDSD_ZBUFFERBITDEPTH),
 	}, ddsd->dwFlags);
 	log(ddsd->dwWidth, ddsd->dwHeight);
-	log(ddsd->ddpfPixelFormat.dwFourCC, ddsd->dwRefreshRate);
+	log(ddsd->lPitch, ddsd->ddpfPixelFormat.dwRGBBitCount);
 }
 
-std::vector<char> buffer(1920 * 1080 * 32);
+std::vector<UCHAR> buffer(1920 * 1080 * 32);
+std::vector<unsigned> pal(256);
 
 class DirectDrawSurfaceProxy : public IDirectDrawSurface3
 {
@@ -172,6 +174,14 @@ public:
 	IDirectDrawSurface3 *_dds3 = nullptr;
 	DDSURFACEDESC ddsd;
 
+	int width = -1;
+	int height = -1;
+	std::vector<UCHAR> surface_mem;
+	std::vector<unsigned> texture_data;
+	sf::Texture texture;
+	sf::Sprite sprite;
+	sf::RectangleShape shape;
+
 	IDirectDrawSurface3 *dds3() {
 		if (!_dds3) {
 			log("_dds3 = NULL");
@@ -181,14 +191,61 @@ public:
 
 	DirectDrawSurfaceProxy(IDirectDrawSurface *dds1, LPDDSURFACEDESC ddsd) {
 		this->_dds1 = dds1;
-		if (ddsd)
-			this->ddsd = *ddsd;
+		set_ddsd(ddsd);
 	}
 
 	DirectDrawSurfaceProxy(IDirectDrawSurface3 *dds3, LPDDSURFACEDESC ddsd) {
 		this->_dds3 = dds3;
-		if(ddsd)
+		set_ddsd(ddsd);
+	}
+
+	void set_ddsd(LPDDSURFACEDESC ddsd) {
+		if (ddsd) {
 			this->ddsd = *ddsd;
+			if (ddsd->dwBackBufferCount) {
+				width = config["backbuffer_w"];
+				height = config["backbuffer_h"];
+			}
+			else {
+				width = ddsd->dwWidth;
+				height = ddsd->dwHeight;
+			}
+
+				texture.create(width, height);
+				texture_data.resize(width * height);
+				for (int i = 0; i < width * height; ++i) {
+					texture_data[i] = 0x88FFFFFF;
+				}
+				texture.update((UCHAR*)texture_data.data());
+				sprite.setTexture(texture);
+						
+			
+
+
+#if 0
+
+			bool status = texture.create(width, height);
+			//texture.loadFromFile("FRAME001.png");
+
+			if (ddsd->dwBackBufferCount == 0 && ddsd->dwWidth < 320) {
+				texture_data.resize(width * height);
+
+				for (int i = 0; i < width * height; ++i) {
+					texture_data[i] = 0x88888888;
+				}
+
+				texture.update((const sf::Uint8*)texture_data.data());
+
+				sprite.setTexture(texture);
+			}
+
+
+
+			//log("texture.create", width, height, status);
+
+			surface_mem.resize(width * height);
+#endif
+		}
 	}
 
 	/*** IUnknown methods ***/
@@ -255,6 +312,25 @@ public:
 			}
 		}
 		else {
+			if (!a) return S_OK;
+
+#if 0
+			shape.setPosition(a->left, a->top);
+			shape.setSize(sf::Vector2f(a->right - a->left, a->bottom - a->top));
+			shape.setOutlineColor(sf::Color::Red);
+			shape.setFillColor(sf::Color::Transparent);
+			shape.setOutlineThickness(1);
+
+			log("window->draw(shape)");
+
+			window->draw(shape);
+#endif
+
+			sprite.setPosition(a->left, a->top);
+
+			if(ddsd.dwBackBufferCount == 0)
+				window->draw(sprite);
+
 			return S_OK;
 		}
 	}
@@ -283,6 +359,21 @@ public:
 			}
 		}
 		else {
+			//if (!a) return S_OK;
+
+#if 0
+			shape.setPosition(a, b);
+			shape.setSize(sf::Vector2f(d->right - d->left, d->bottom - d->top));
+			shape.setOutlineColor(sf::Color::Red);
+			shape.setOutlineThickness(1);
+
+			window->draw(shape);
+#endif
+			sprite.setPosition(a, b);
+
+			if (ddsd.dwBackBufferCount == 0)
+				window->draw(sprite);
+
 			return S_OK;
 		}
 	}
@@ -313,6 +404,9 @@ public:
 			return result;
 		}
 		else {
+			window->display();
+			Sleep(8);
+			window->clear();
 			return S_OK;
 		}
 	}
@@ -429,6 +523,7 @@ public:
 				a->dwWidth = ddsd.dwWidth;
 				a->dwHeight = ddsd.dwHeight;
 			}
+			a->lPitch = width;
 			return S_OK;
 		}
 	}
@@ -462,8 +557,12 @@ public:
 			return result;
 		}
 		else {
+			log_ddsd(&ddsd);
 			*b = ddsd;
+
+			buffer.resize(buffer.size(), 0xAB);
 			b->lpSurface = buffer.data();
+			
 			return S_OK;
 		}
 	}
@@ -522,6 +621,24 @@ public:
 			return result;
 		}
 		else {
+			return S_OK;
+
+			if (ddsd.dwBackBufferCount == 0) {
+				for (int i = 0; i < width * height; ++i) {
+					UCHAR j = buffer[i];
+					texture_data[i] = pal[j];
+					UCHAR *px = (UCHAR *)(texture_data.data() + i);
+					
+
+					texture_data[i] = 0xFFFFFFFF;
+				}
+				texture.update((const sf::Uint8*)texture_data.data());
+				auto im = texture.copyToImage();
+				static int i = 0;
+				im.saveToFile("a/" + std::to_string(i++) + ".png");
+				sprite.setTexture(texture);
+			}
+
 			return S_OK;
 		}
 	}
@@ -626,12 +743,10 @@ struct DirectDrawProxy : public IDirectDraw2
 	IDirectDraw *dd = nullptr;
 	IDirectDraw2 *dd2 = nullptr;
 
-	sf::RenderWindow window;
-
 	DirectDrawProxy(IDirectDraw *dd) {
-		window.create(hWnd);
-		window.clear(sf::Color::Black);
-		window.display();
+		window->create(hWnd);
+		window->clear(sf::Color::Black);
+		window->display();
 		this->dd = dd;
 	}
 
@@ -937,13 +1052,21 @@ json _config;
 
 int proxy_init() {
 	log_file.open("log.txt");
-	log_file.rdbuf()->pubsetbuf(0, 0);
+	//log_file.rdbuf()->pubsetbuf(0, 0);
 
 	std::ifstream cfg_file;
 	cfg_file.open("config.json");
 	_config << cfg_file;
 
 	DISABLE_PROXY = _config["disable_proxy"];
+
+	for (auto &c : pal) {
+		unsigned char *px = (unsigned char *)&c;
+		px[0] = rand();
+			px[1] = rand();
+			px[2] = rand();
+		px[0] = 255;
+	}
 
 	return 0;
 }
@@ -952,6 +1075,7 @@ int _ = proxy_init();
 
 PROXY_EXPORTS void SetHwnd(HWND _hWnd) {
 	hWnd = _hWnd;
+	window = new sf::RenderWindow();
 }
 
 PROXY_EXPORTS void *ProxyLog() {
