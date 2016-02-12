@@ -173,7 +173,25 @@ void log_fx(LPDDBLTFX bltfx) {
 	}, bltfx->dwDDFX);
 }
 
+int fileExists(TCHAR * file)
+{
+	WIN32_FIND_DATA FindFileData;
+	HANDLE handle = FindFirstFile(file, &FindFileData);
+	int found = handle != INVALID_HANDLE_VALUE;
+	if (found)
+	{
+		//FindClose(&handle); this will crash
+		FindClose(handle);
+	}
+	return found;
+}
+
 std::vector<unsigned> pal(256);
+
+class DirectDrawSurfaceProxy;
+
+DirectDrawSurfaceProxy *fb = nullptr;
+DirectDrawSurfaceProxy *bb = nullptr;
 
 class DirectDrawSurfaceProxy : public IDirectDrawSurface3
 {
@@ -200,6 +218,7 @@ public:
 	IDirectDrawSurface3 *_dds3 = nullptr;
 	DDSURFACEDESC ddsd;
 	DDSURFACEDESC gddsd;
+	void *pSurface = nullptr;
 
 	int width = -1;
 	int height = -1;
@@ -240,6 +259,7 @@ public:
 			this->ddsd = *ddsd;
 
 			if (ddsd->dwBackBufferCount) {
+				fb = this;
 				is_frontbuffer = true;
 				width = config["backbuffer_w"];
 				height = config["backbuffer_h"];
@@ -433,7 +453,25 @@ public:
 			bool BltFast_enable = config["BltFast_enable"];
 
 			if (BltFast_enable) {
+
+#if 0
+				for (auto b : { fb, bb }) {
+					if (fileExists("dump")) {
+						DDSURFACEDESC x;
+						b->Lock(0, &x, 0, 0);
+						static int i = 0;
+						if (x.lpSurface && x.lpSurface != (void*)0xCCCCCCCC) {
+							auto r = indexed2rgba((UCHAR*)x.lpSurface, width, height, width);
+							stbi_write_bmp(("blt/" + std::to_string(i++) + ".bmp").data(), width, height, 4, r.data());
+
+						}
+						b->Unlock(0);
+					}
+				}
+#endif
+	
 				auto result = dds3()->BltFast(a, b, unwrap(c), d, e);
+
 
 				log_hresult(result);
 
@@ -533,6 +571,11 @@ public:
 
 			auto p = (DirectDrawSurfaceProxy*)wrap(adds3);
 			*b = p;
+			p->width = width;
+			p->height = height;
+			p->is_frontbuffer = false;
+			p->is_backbuffer = true;
+			bb = p;
 
 			log_out(*b);
 
@@ -545,6 +588,7 @@ public:
 
 			p->is_frontbuffer = false;
 			p->is_backbuffer = true;
+			bb = p;
 
 			log_out(p);
 
@@ -665,6 +709,8 @@ public:
 		if (DISABLE_PROXY) {
 			auto result = dds3()->Lock(a, b, c, d);
 
+			pSurface = (char *)b->lpSurface;
+
 
 			if (b->lpSurface) {
 				log("lpSurface:", b->lpSurface);
@@ -681,7 +727,6 @@ public:
 
 			Dump("Lock_" + std::to_string(h(&x)), b);
 
-			return result;
 		}
 		else {
 			DDSURFACEDESC x = ddsd;
@@ -693,14 +738,19 @@ public:
 			b->dwWidth = width;
 			b->dwHeight = height;
 
-			buffer.clear();
-			buffer.resize(gddsd.lPitch * height * 4, 0);
+			//buffer.clear();
+			buffer.resize(gddsd.lPitch * height * 16, 0);
 			texture_data.resize(width * height, 0);
 
 			b->lpSurface = buffer.data();
+			pSurface = b->lpSurface;
 			
-			return S_OK;
+			
 		}
+
+		dump();
+
+		return S_OK;
 	}
 	STDMETHOD(ReleaseDC)(THIS_ HDC a) {
 		DDRAW_SURFACE_PROXY(ReleaseDC);
@@ -749,16 +799,67 @@ public:
 		}
 	}
 
+	static std::vector<UCHAR> indexed2rgba(const UCHAR *indexed_buffer, int width, int height, int pitch) {
+		std::vector<UCHAR> rgba_buffer(width * height * 4);
+		for (int i = 0; i < height; ++i) {
+			for (int j = 0; j < width; ++j) {
+				UCHAR *b = (UCHAR*) &rgba_buffer[(i * width + j) * 4];
+
+
+
+
+
+
+
+
+
+				UCHAR k = indexed_buffer[i * pitch + j];
+				b[0] = b[1] = b[2] = k;
+				//b[3] = k ? 0xFF : 0;
+				b[3] = 0xFF;
+			};
+		}
+		return rgba_buffer;
+	}
+
+	void dump(bool unlock = false) {
+		if (pSurface && fileExists("dump")) {
+			static int i = 0;
+			int pitch = width;
+			if (gddsd.lPitch > 0 && gddsd.lPitch < 1024) pitch = gddsd.lPitch;
+
+			auto rgbab = indexed2rgba((UCHAR*)pSurface, width, height, pitch);
+
+			char t[64];
+
+			const char *tp = "sf";
+			if (is_frontbuffer) tp = "fb";
+			if (is_backbuffer) tp = "bb";
+
+			sprintf_s(t, "d/%05d_%p_%s_%s.png", i++, this, tp, unlock ? "unlock": "lock");
+
+			stbi_write_bmp(t, width, height, 4, rgbab.data());
+		}
+	}
+
 	STDMETHOD(Unlock)(THIS_ LPVOID a) {
 		DDRAW_SURFACE_PROXY(Unlock);
 		log("this = ", this);
 
+		std::string fb = is_frontbuffer ? "fb" : "bb";
+		dump(true);
+
+		pSurface = nullptr;
+
 		if (DISABLE_PROXY) {
+			
+			
 			auto result = dds3()->Unlock(a);
 			return result;
 		}
 		else {
 			//return S_OK;
+			
 
 
 				if (!is_backbuffer || config["copy_backbuffer"].get<bool>()) {
@@ -777,7 +878,7 @@ public:
 							UCHAR *b = (UCHAR *)px;
 							b[0] = b[1] = b[2] = k;
 							//b[3] = k ? 0xFF : 0;
-							b[3] = 64;
+							b[3] = 128;
 						};
 					}
 
@@ -794,7 +895,13 @@ public:
 				if (!is_backbuffer || config["draw_backbuffer"].get<bool>()) {
 					sprite.setPosition(0, 0);
 					window->draw(sprite);
+					
 				}
+
+				if (is_frontbuffer) {
+					window->display();
+				}
+
 
 				//auto im = texture.copyToImage();
 
