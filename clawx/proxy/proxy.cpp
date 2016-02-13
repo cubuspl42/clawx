@@ -827,8 +827,14 @@ struct DirectDrawProxy : public IDirectDraw2
 		DDRAW_PROXY(EnumDisplayModes);
 
 		DDSURFACEDESC ddsd;
-		Load("EnumDisplayModes_0", &ddsd);
 
+		Load("EnumDisplayModes_0", &ddsd);
+		callback(&ddsd, user_ptr);
+
+		Load("EnumDisplayModes_1", &ddsd);
+		callback(&ddsd, user_ptr);
+
+		Load("EnumDisplayModes_2", &ddsd);
 		callback(&ddsd, user_ptr);
 
 		return S_OK;
