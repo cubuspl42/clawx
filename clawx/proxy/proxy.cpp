@@ -10,6 +10,8 @@
 //#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+#include <unordered_map>
+
 using json = nlohmann::json;
 
 const unsigned MAGIC = 0x1a1b1c00;
@@ -62,6 +64,7 @@ unsigned set_flags(std::vector<std::pair<unsigned, std::string>> fdef, std::vect
 struct DirectDrawPaletteProxy : public IDirectDrawPalette
 {
 	std::vector<PALETTEENTRY> entries;
+	std::unordered_map<unsigned, int> reverse_map;
 
 	DirectDrawPaletteProxy() {}
 
@@ -72,17 +75,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 
 	int mapColor(sf::Color c) {
 		c.a = 0xFF;
-
-		int i = 0;
-		for (auto &e : entries) {
-			sf::Color ec(e.peRed, e.peGreen, e.peBlue, 0xFF);
-			if (c == ec) {
-				return i;
-			}
-			++i;
-		}
-
-		return -1;
+		return reverse_map[c.toInteger()];
 	}
 
 	/*** IUnknown methods ***/
@@ -111,6 +104,16 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 	) {
 		DDRAW_PALETTE_PROXY(GetEntries);
 
+		struct P {
+			PALETTEENTRY e[256];
+		};
+
+		if (entries.empty()) {
+			entries.resize(256);
+			P *p = (P*)entries.data();
+			Load("GetEntries_0", p);
+		}
+
 		entries.resize(dwBase + dwNumEntries);
 
 		for (int i = dwBase; i < dwNumEntries; ++i) {
@@ -137,6 +140,15 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 		for (int i = dwStartingEntry; i < dwCount; ++i) {
 			entries[i] = *lpEntries;
 			++lpEntries;
+		}
+
+		reverse_map.reserve(entries.size());
+
+		int i = 0;
+		for (auto &e : entries) {
+			sf::Color c(e.peRed, e.peGreen, e.peBlue, 0xFF);
+			reverse_map[c.toInteger()] = i;
+			++i;
 		}
 
 		return S_OK;
@@ -252,6 +264,7 @@ public:
 		}
 
 		texture.create(width, height);
+		indexed_buffer.resize(640 * 480 * 4); // ...
 	}
 
 	const sf::Texture &getTexture() {
@@ -335,6 +348,8 @@ public:
 		sprite.setPosition(x, y);
 		render_texture->draw(sprite);
 
+		dump("_blt");
+
 		return S_OK;
 	}
 
@@ -370,6 +385,8 @@ public:
 		sprite.setPosition(x, y);
 		render_texture->draw(sprite);
 
+		dump("_bltfast");
+
 		return S_OK;
 	}
 
@@ -393,9 +410,10 @@ public:
 		if(i % 5 == 0)
 			load_config();
 
-		//std::swap(front_buffer->render_texture, back_buffer->render_texture);
+		std::swap(front_buffer->render_texture, back_buffer->render_texture);
 
 		front_buffer->display();
+		back_buffer->render_texture->clear(sf::Color::Transparent);
 
 		return S_OK;
 	}
@@ -461,6 +479,10 @@ public:
 
 		pitch = a->lPitch;
 
+		if (pitch < width) {
+			pitch = 640;
+		}
+
 		return S_OK;
 	}
 	STDMETHOD(Initialize)(THIS_ LPDIRECTDRAW, LPDDSURFACEDESC) {
@@ -478,12 +500,17 @@ public:
 		b->dwWidth = width;
 		b->dwHeight = height;
 
-		sf::Image image = getTexture().copyToImage();
-		indexed_buffer = image2indexed(image, ddpp, pitch);
+		if (render_texture)
+			render_texture->display();
 
+		if (config["lock_textures"].get<bool>()) {
+			sf::Image image = getTexture().copyToImage();
+			indexed_buffer = image2indexed(image, ddpp, pitch);
+		}
+		
 		b->lpSurface = indexed_buffer.data();
 
-		dump();
+		dump("_lock");
 
 		return S_OK;
 	}
@@ -519,9 +546,13 @@ public:
 		sf::Image image;
 		image.create(width, height);
 
-		if (!ddpp) {
+		if (!ddpp && front_buffer && front_buffer->ddpp) {
+			ddpp = front_buffer->ddpp;
+		}
+		else {
 			return image;
 		}
+
 
 		for (int i = 0; i < height; ++i) {
 			for (int j = 0; j < width; ++j) {
@@ -539,7 +570,10 @@ public:
 		int height = image.getSize().y;
 		std::vector<UCHAR> indexed_buffer(pitch * height);
 
-		if (!ddpp) {
+		if (!ddpp && front_buffer && front_buffer->ddpp) {
+			ddpp = front_buffer->ddpp;
+		}
+		else {
 			return indexed_buffer;
 		}
 
@@ -553,7 +587,7 @@ public:
 		return indexed_buffer;
 	}
 
-	void dump(bool unlock = false) {
+	void dump(std::string p) {
 #if 0
 		if (indexed_buffer.size() && fileExists("dump")) {
 			static int i = 0;
@@ -582,9 +616,9 @@ public:
 			if (kind == FRONT_BUFFER) tp = "fb";
 			if (kind == BACK_BUFFER) tp = "bb";
 
-			sprintf_s(t, "d/%05d_%p_%s_%s.bmp", i++, this, tp, unlock ? "unlock" : "lock");
+			sprintf_s(t, "d/%05d_%p_%s_%s.bmp", i++, this, tp, p.c_str());
 
-			sf::Image image = texture.copyToImage();
+			sf::Image image = getTexture().copyToImage();
 			image.saveToFile(t);
 
 			//stbi_write_bmp(t, width, height, 4, pixels);
@@ -608,7 +642,7 @@ public:
 		}
 
 
-		dump(true);
+		dump("_unlock");
 			
 		return S_OK;
 	}
@@ -753,8 +787,8 @@ struct DirectDrawProxy : public IDirectDraw2
 	}
 
 	DirectDrawProxy() {
+		window->setVerticalSyncEnabled(config["vsync"].get<bool>());
 		window->create(hWnd);
-		window->setVerticalSyncEnabled(true);
 		window->clear(sf::Color::Red);
 		window->display();
 	}
