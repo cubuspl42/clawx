@@ -4,13 +4,20 @@
 #include "dump.h"
 
 #include "json.hpp"
-#include "SFML/Window.hpp"
-#include "SFML/Graphics.hpp"
-
-//#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+// Include GLEW
+#include <GL/glew.h>
+
+#include <SFML/Window.hpp>
+#include <SFML/OpenGL.hpp>
+
+#include "shader.hpp"
+
+#include <fstream>
 #include <unordered_map>
+
+#define config (GetProxy()->GetConfig())
 
 using json = nlohmann::json;
 
@@ -18,10 +25,7 @@ const unsigned MAGIC = 0x1a1b1c00;
 
 bool DISABLE_PROXY = false;
 
-HWND hWnd;
-sf::RenderWindow *window;
-
-sf::RenderTexture *tempbuffer;
+sf::Window *window;
 
 template<typename T>
 size_t h(const T* ptr) {
@@ -35,47 +39,24 @@ size_t h(const T* ptr) {
 	return seed;
 }
 
-void load_config();
-
 size_t h_ddsd00(DDSURFACEDESC *ddsd) {
 	DDSURFACEDESC ddsd00 = *ddsd;
 	ddsd00.dwWidth = ddsd00.dwHeight = 0;
 	return h(&ddsd00);
 }
 
-auto make_fdef(std::vector<std::pair<unsigned, std::string>> fdef) {
-	return fdef;
-}
+#define PROXY_UNIMPLEMENTED() 0
 
-unsigned set_flags(std::vector<std::pair<unsigned, std::string>> fdef, std::vector<std::string> flags) {
-	unsigned f = 0;
-	for (auto fi : flags) {
-		for (auto &p : fdef) {
-			if (fi == p.second) {
-				f |= p.first;
-			}
-		}
-	}
-	return f;
-}
-
-#define DDRAW_PALETTE_PROXY(method) log("DirectDrawPaletteProxy", #method);
+#define DDRAW_PALETTE_PROXY(method)
 
 struct DirectDrawPaletteProxy : public IDirectDrawPalette
 {
+	const unsigned PALETTE_SIZE = 256;
+
 	std::vector<PALETTEENTRY> entries;
-	std::unordered_map<unsigned, int> reverse_map;
 
-	DirectDrawPaletteProxy() {}
-
-	sf::Color mapIndex(int i) {
-		auto &e = entries[i];
-		return sf::Color(e.peRed, e.peGreen, e.peBlue, 0xFF);
-	}
-
-	int mapColor(sf::Color c) {
-		c.a = 0xFF;
-		return reverse_map[c.toInteger()];
+	DirectDrawPaletteProxy() {
+		entries.resize(PALETTE_SIZE);
 	}
 
 	/*** IUnknown methods ***/
@@ -104,21 +85,10 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 	) {
 		DDRAW_PALETTE_PROXY(GetEntries);
 
-		struct P {
-			PALETTEENTRY e[256];
-		};
+		assert(dwBase == 0 && dwNumEntries == PALETTE_SIZE);
 
-		if (entries.empty()) {
-			entries.resize(256);
-			P *p = (P*)entries.data();
-			Load("GetEntries_0", p);
-		}
-
-		entries.resize(dwBase + dwNumEntries);
-
-		for (int i = dwBase; i < dwNumEntries; ++i) {
-			*lpEntries = entries[i];
-			++lpEntries;
+		for (int i = 0; i < PALETTE_SIZE; ++i) {
+			lpEntries[i] = entries[i];
 		}
 
 		return S_OK;
@@ -135,68 +105,30 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 	) {
 		DDRAW_PALETTE_PROXY(SetEntries);
 
-		entries.resize(dwStartingEntry + dwCount);
+		assert(dwStartingEntry == 0 && dwCount == PALETTE_SIZE);
 
-		for (int i = dwStartingEntry; i < dwCount; ++i) {
-			entries[i] = *lpEntries;
-			++lpEntries;
+		for (int i = 0; i < PALETTE_SIZE; ++i) {
+			entries[i] = lpEntries[i];
 		}
 
-		reverse_map.reserve(entries.size());
+		std::vector<byte> texture_data(PALETTE_SIZE * 4);
 
-		int i = 0;
-		for (auto &e : entries) {
-			sf::Color c(e.peRed, e.peGreen, e.peBlue, 0xFF);
-			reverse_map[c.toInteger()] = i;
-			++i;
+		for (int i = 0; i < PALETTE_SIZE; ++i) {
+			auto &e = entries[i];
+			byte *px = &texture_data[i * 4];
+			px[0] = e.peRed;
+			px[1] = e.peGreen;
+			px[2] = e.peBlue;
+			px[3] = 0xFF;
 		}
 
 		return S_OK;
 	}
 };
 
-#define DDRAW_SURFACE_PROXY(method) log("DirectDrawSurfaceProxy", #method);
+#define DDRAW_SURFACE_PROXY(method)
 
 #define _DDSCL_NORMAL 0
-
-void log_ddsd(LPDDSURFACEDESC ddsd) {
-	log_flags("ddsd->dwFlags", {
-		FLAG(DDSD_ALL),
-		FLAG(DDSD_ALPHABITDEPTH),
-		FLAG(DDSD_BACKBUFFERCOUNT),
-		FLAG(DDSD_CAPS),
-		FLAG(DDSD_CKDESTBLT),
-		FLAG(DDSD_CKDESTOVERLAY),
-		FLAG(DDSD_CKSRCBLT),
-		FLAG(DDSD_CKSRCOVERLAY),
-		FLAG(DDSD_HEIGHT),
-		FLAG(DDSD_LINEARSIZE),
-		FLAG(DDSD_LPSURFACE),
-		FLAG(DDSD_MIPMAPCOUNT),
-		FLAG(DDSD_PITCH),
-		FLAG(DDSD_PIXELFORMAT),
-		FLAG(DDSD_REFRESHRATE),
-		FLAG(DDSD_TEXTURESTAGE),
-		FLAG(DDSD_WIDTH),
-		FLAG(DDSD_ZBUFFERBITDEPTH),
-	}, ddsd->dwFlags);
-	log(ddsd->dwWidth, ddsd->dwHeight);
-	log(ddsd->lPitch, ddsd->ddpfPixelFormat.dwRGBBitCount);
-}
-
-void log_fx(LPDDBLTFX bltfx) {
-	log_flags("bltfx->dwDDFX", {
-		FLAG(DDBLTFX_ARITHSTRETCHY),
-		FLAG(DDBLTFX_MIRRORLEFTRIGHT),
-		FLAG(DDBLTFX_MIRRORUPDOWN),
-		FLAG(DDBLTFX_NOTEARING),
-		FLAG(DDBLTFX_ROTATE180),
-		FLAG(DDBLTFX_ROTATE270),
-		FLAG(DDBLTFX_ROTATE90),
-		FLAG(DDBLTFX_ZBUFFERBASEDEST),
-		FLAG(DDBLTFX_ZBUFFERRANGE)
-	}, bltfx->dwDDFX);
-}
 
 int fileExists(TCHAR * file)
 {
@@ -244,9 +176,11 @@ public:
 	int height = 0;
 	int pitch = 0;
 
-	std::unique_ptr<sf::RenderTexture> render_texture;
-	sf::Texture texture;
 	std::vector<UCHAR> indexed_buffer;
+
+	GLuint VertexArrayID;
+	GLuint programID;
+	GLuint vertexbuffer;
 
 	DirectDrawPaletteProxy *ddpp = nullptr;
 
@@ -258,33 +192,23 @@ public:
 		this->height = height;
 		this->pitch = pitch;
 
-		if (kind != NORMAL_SURFACE) {
-			render_texture = std::make_unique<sf::RenderTexture>();
-			render_texture->create(width, height);
-		}
-
-		texture.create(width, height);
 		indexed_buffer.resize(640 * 480 * 4); // ...
-	}
 
-	const sf::Texture &getTexture() {
-		if (render_texture) {
-			return render_texture->getTexture();
-		}
-		else {
-			return texture;
-		}
-	}
+		glGenVertexArrays(1, &VertexArrayID);
+		glBindVertexArray(VertexArrayID);
 
-	sf::Sprite getSprite() {
-		return sf::Sprite(getTexture());
-	}
+		// Create and compile our GLSL program from the shaders
+		programID = LoadShaders("SimpleVertexShader.vertexshader", "SimpleFragmentShader.fragmentshader");
 
-	void display() {
-		sf::Sprite sprite = getSprite();
-		window->draw(sprite);
-		window->display();
-		//window->clear();
+		static const GLfloat g_vertex_buffer_data[] = {
+			-1.0f, -1.0f, 0.0f,
+			1.0f, -1.0f, 0.0f,
+			0.0f,  1.0f, 0.0f,
+		};
+
+		glGenBuffers(1, &vertexbuffer);
+		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
 	}
 
 	/*** IUnknown methods ***/
@@ -343,12 +267,8 @@ public:
 		}
 
 		DirectDrawSurfaceProxy *ddsd = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
-		
-		sf::Sprite sprite = ddsd->getSprite();
-		sprite.setPosition(x, y);
-		render_texture->draw(sprite);
 
-		dump("_blt");
+		//dump("_blt");
 
 		return S_OK;
 	}
@@ -381,11 +301,27 @@ public:
 
 		DirectDrawSurfaceProxy *ddsd = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
 
-		sf::Sprite sprite = ddsd->getSprite();
-		sprite.setPosition(x, y);
-		render_texture->draw(sprite);
+		//dump("_bltfast");
 
-		dump("_bltfast");
+		// Use our shader
+		glUseProgram(programID);
+
+		// 1rst attribute buffer : vertices
+		glEnableVertexAttribArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+		glVertexAttribPointer(
+			0,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
+			3,                  // size
+			GL_FLOAT,           // type
+			GL_FALSE,           // normalized?
+			0,                  // stride
+			(void*)0            // array buffer offset
+		);
+
+		// Draw the triangle !
+		glDrawArrays(GL_TRIANGLES, 0, 3); // 3 indices starting at 0 -> 1 triangle
+
+		glDisableVertexAttribArray(0);
 
 		return S_OK;
 	}
@@ -407,13 +343,10 @@ public:
 
 		static int i = 0;
 		++i;
-		if(i % 5 == 0)
-			load_config();
+		if (i % 5 == 0)
+			GetProxy()->ReloadConfig();
 
-		std::swap(front_buffer->render_texture, back_buffer->render_texture);
-
-		front_buffer->display();
-		back_buffer->render_texture->clear(sf::Color::Transparent);
+		window->display();
 
 		return S_OK;
 	}
@@ -468,7 +401,6 @@ public:
 	}
 	STDMETHOD(GetSurfaceDesc)(THIS_ LPDDSURFACEDESC a) {
 		DDRAW_SURFACE_PROXY(GetSurfaceDesc);
-		log("this = ", this);
 
 		std::string s = "GetSurfaceDesc_" + std::to_string(d_h);
 
@@ -500,17 +432,9 @@ public:
 		b->dwWidth = width;
 		b->dwHeight = height;
 
-		if (render_texture)
-			render_texture->display();
-
-		if (config["lock_textures"].get<bool>()) {
-			sf::Image image = getTexture().copyToImage();
-			indexed_buffer = image2indexed(image, ddpp, pitch);
-		}
-		
 		b->lpSurface = indexed_buffer.data();
 
-		dump("_lock");
+		//dump("_lock");
 
 		return S_OK;
 	}
@@ -540,51 +464,6 @@ public:
 		ddpp = (DirectDrawPaletteProxy *)a;
 
 		return S_OK;
-	}
-
-	static sf::Image indexed2image(const UCHAR *indexed_buffer, DirectDrawPaletteProxy *ddpp, int width, int height, int pitch) {
-		sf::Image image;
-		image.create(width, height);
-
-		if (!ddpp && front_buffer && front_buffer->ddpp) {
-			ddpp = front_buffer->ddpp;
-		}
-		else {
-			return image;
-		}
-
-
-		for (int i = 0; i < height; ++i) {
-			for (int j = 0; j < width; ++j) {
-				UCHAR k = indexed_buffer[i * pitch + j];
-				sf::Color c = ddpp->mapIndex(k);
-				image.setPixel(j, i, c);
-			};
-		}
-
-		return image;
-	}
-
-	static std::vector<UCHAR> image2indexed(const sf::Image &image, DirectDrawPaletteProxy *ddpp, int pitch) {
-		int width = image.getSize().x;
-		int height = image.getSize().y;
-		std::vector<UCHAR> indexed_buffer(pitch * height);
-
-		if (!ddpp && front_buffer && front_buffer->ddpp) {
-			ddpp = front_buffer->ddpp;
-		}
-		else {
-			return indexed_buffer;
-		}
-
-		for (int i = 0; i < height; ++i) {
-			for (int j = 0; j < width; ++j) {
-				sf::Color c = image.getPixel(j, i);
-				UCHAR k = ddpp->mapColor(c);
-				indexed_buffer[i * pitch + j] = k;
-			};
-		}
-		return indexed_buffer;
 	}
 
 	void dump(std::string p) {
@@ -618,9 +497,6 @@ public:
 
 			sprintf_s(t, "d/%05d_%p_%s_%s.bmp", i++, this, tp, p.c_str());
 
-			sf::Image image = getTexture().copyToImage();
-			image.saveToFile(t);
-
 			//stbi_write_bmp(t, width, height, 4, pixels);
 		}
 #endif
@@ -629,20 +505,7 @@ public:
 	STDMETHOD(Unlock)(THIS_ LPVOID a) {
 		DDRAW_SURFACE_PROXY(Unlock);
 
-		sf::Image image = indexed2image(indexed_buffer.data(), ddpp, width, height, pitch);
-		texture.update(image);
-
-		if (kind != NORMAL_SURFACE) {
-			sf::Sprite sprite(texture);
-			render_texture->draw(sprite);
-
-			if (kind == FRONT_BUFFER) {
-				display();
-			}
-		}
-
-
-		dump("_unlock");
+		//dump("_unlock");
 			
 		return S_OK;
 	}
@@ -678,103 +541,7 @@ public:
 	}
 };
 
-void log_caps(LPDDCAPS ddcaps) {
-	 log_flags("ddcaps->dwCaps", {
-		FLAG(DDCAPS_3D),
-		FLAG(DDCAPS_ALIGNBOUNDARYDEST),
-		FLAG(DDCAPS_ALIGNBOUNDARYSRC),
-		FLAG(DDCAPS_ALIGNSIZEDEST),
-		FLAG(DDCAPS_ALIGNSIZESRC),
-		FLAG(DDCAPS_ALIGNSTRIDE),
-		FLAG(DDCAPS_ALPHA),
-		FLAG(DDCAPS_BANKSWITCHED),
-		FLAG(DDCAPS_BLT),
-		FLAG(DDCAPS_BLTCOLORFILL),
-		FLAG(DDCAPS_BLTDEPTHFILL),
-		FLAG(DDCAPS_BLTFOURCC),
-		FLAG(DDCAPS_BLTQUEUE),
-		FLAG(DDCAPS_BLTSTRETCH),
-		FLAG(DDCAPS_CANBLTSYSMEM),
-		FLAG(DDCAPS_CANCLIP),
-		FLAG(DDCAPS_CANCLIPSTRETCHED),
-		FLAG(DDCAPS_COLORKEY),
-		FLAG(DDCAPS_COLORKEYHWASSIST),
-		FLAG(DDCAPS_GDI),
-		FLAG(DDCAPS_NOHARDWARE),
-		FLAG(DDCAPS_OVERLAY),
-		FLAG(DDCAPS_OVERLAYCANTCLIP),
-		FLAG(DDCAPS_OVERLAYFOURCC),
-		FLAG(DDCAPS_OVERLAYSTRETCH),
-		FLAG(DDCAPS_PALETTE),
-		FLAG(DDCAPS_PALETTEVSYNC),
-		FLAG(DDCAPS_READSCANLINE),
-		FLAG(DDCAPS_VBI),
-		FLAG(DDCAPS_ZBLTS),
-		FLAG(DDCAPS_ZOVERLAYS),
-	}, ddcaps->dwCaps);
-
-	log_flags("ddcaps->dwCaps2", {
-		FLAG(DDCAPS2_AUTOFLIPOVERLAY),
-		FLAG(DDCAPS2_CANBOBHARDWARE),
-		FLAG(DDCAPS2_CANBOBINTERLEAVED),
-		FLAG(DDCAPS2_CANBOBNONINTERLEAVED),
-		FLAG(DDCAPS2_CANCALIBRATEGAMMA),
-		FLAG(DDCAPS2_CANDROPZ16BIT),
-		FLAG(DDCAPS2_CANFLIPODDEVEN),
-		FLAG(DDCAPS2_CANMANAGETEXTURE),
-		FLAG(DDCAPS2_CANRENDERWINDOWED),
-		FLAG(DDCAPS2_CERTIFIED),
-		FLAG(DDCAPS2_COLORCONTROLPRIMARY),
-		FLAG(DDCAPS2_COLORCONTROLOVERLAY),
-		FLAG(DDCAPS2_COPYFOURCC),
-		FLAG(DDCAPS2_FLIPINTERVAL),
-		FLAG(DDCAPS2_FLIPNOVSYNC),
-		FLAG(DDCAPS2_NO2DDURING3DSCENE),
-		FLAG(DDCAPS2_NONLOCALVIDMEM),
-		FLAG(DDCAPS2_NONLOCALVIDMEMCAPS),
-		FLAG(DDCAPS2_NOPAGELOCKREQUIRED),
-		FLAG(DDCAPS2_PRIMARYGAMMA),
-		FLAG(DDCAPS2_STEREO),
-		FLAG(DDCAPS2_TEXMANINNONLOCALVIDMEM),
-		FLAG(DDCAPS2_VIDEOPORT),
-		FLAG(DDCAPS2_WIDESURFACES),
-	}, ddcaps->dwCaps2);
-}
-
-void log_ddscaps(LPDDSCAPS ddscaps) {
-	log_flags("ddscaps->dwCaps", {
-		//FLAG(DDSCAPS_3D),
-		FLAG(DDSCAPS_3DDEVICE),
-		FLAG(DDSCAPS_ALLOCONLOAD),
-		FLAG(DDSCAPS_ALPHA),
-		FLAG(DDSCAPS_BACKBUFFER),
-		FLAG(DDSCAPS_COMPLEX),
-		FLAG(DDSCAPS_FLIP),
-		FLAG(DDSCAPS_FRONTBUFFER),
-		FLAG(DDSCAPS_HWCODEC),
-		FLAG(DDSCAPS_LIVEVIDEO),
-		FLAG(DDSCAPS_LOCALVIDMEM),
-		FLAG(DDSCAPS_MIPMAP),
-		FLAG(DDSCAPS_MODEX),
-		FLAG(DDSCAPS_NONLOCALVIDMEM),
-		FLAG(DDSCAPS_OFFSCREENPLAIN),
-		FLAG(DDSCAPS_OPTIMIZED),
-		FLAG(DDSCAPS_OVERLAY),
-		FLAG(DDSCAPS_OWNDC),
-		FLAG(DDSCAPS_PALETTE),
-		FLAG(DDSCAPS_PRIMARYSURFACE),
-		FLAG(DDSCAPS_STANDARDVGAMODE),
-		FLAG(DDSCAPS_SYSTEMMEMORY),
-		FLAG(DDSCAPS_TEXTURE),
-		FLAG(DDSCAPS_VIDEOMEMORY),
-		FLAG(DDSCAPS_VIDEOPORT),
-		FLAG(DDSCAPS_VISIBLE),
-		FLAG(DDSCAPS_WRITEONLY),
-		FLAG(DDSCAPS_ZBUFFER),
-	}, ddscaps->dwCaps);
-}
-
-#define DDRAW_PROXY(method) log("DirectDrawProxy", #method);
+#define DDRAW_PROXY(method)
 
 struct DirectDrawProxy : public IDirectDraw2
 {
@@ -787,10 +554,7 @@ struct DirectDrawProxy : public IDirectDraw2
 	}
 
 	DirectDrawProxy() {
-		window->setVerticalSyncEnabled(config["vsync"].get<bool>());
-		window->create(hWnd);
-		window->clear(sf::Color::Red);
-		window->display();
+		
 	}
 
 	/*** IUnknown methods ***/
@@ -943,50 +707,99 @@ struct DirectDrawProxy : public IDirectDraw2
 	};
 };
 
-PROXY_EXPORTS HRESULT DirectDrawProxyCreate(
-	DirectDrawCreatePtr _DirectDrawCreate,
-	GUID *lpGUID,
-	LPDIRECTDRAW *lplpDD,
-	IUnknown     *pUnkOuter
-) {
-	auto ddp = new DirectDrawProxy();
+class Proxy : public IProxy {
+	json _config;
 
-	*lplpDD = (IDirectDraw *)ddp;
+public:
 
-	return S_OK;
-}
+	Proxy() {
+		ReloadConfig();
 
-std::ofstream log_file;
-json _config;
+		window = new sf::Window;
 
-void load_config() {
-	std::ifstream cfg_file;
-	cfg_file.open("config.json");
-	_config << cfg_file;
-	cfg_file.close();
-}
+		glewExperimental = true; // Needed for core profile
 
-int proxy_init() {
-	log_file.open("log.txt");
+		if (glewInit() != GLEW_OK) {
+			throw std::runtime_error("Failed to initialize GLEW");
+		}
+	}
 
-	load_config();
+	~Proxy() {}
 
-	return 0;
-}
+	HWND CreateWindowExA(
+		CreateWindowExA_type _CreateWindowExA,
+		DWORD     dwExStyle,
+		LPCTSTR   lpClassName,
+		LPCTSTR   lpWindowName,
+		DWORD     dwStyle,
+		int       x,
+		int       y,
+		int       nWidth,
+		int       nHeight,
+		HWND      hWndParent,
+		HMENU     hMenu,
+		HINSTANCE hInstance,
+		LPVOID    lpParam
+	) {
+		if (config["CreateWindowExA_disable_style"]) {
+			dwStyle = 0;
+		}
 
-int _ = proxy_init();
+		nWidth = config["CreateWindowExA_nWidth"];
+		nHeight = config["CreateWindowExA_nHeight"];
 
-PROXY_EXPORTS void SetHwnd(HWND _hWnd) {
-	hWnd = _hWnd;
-	window = new sf::RenderWindow();
-	tempbuffer = new sf::RenderTexture();
-	tempbuffer->create(config["backbuffer_w"], config["backbuffer_h"]);
-}
+		HWND hWnd = _CreateWindowExA(
+			dwExStyle,
+			lpClassName,
+			lpWindowName,
+			dwStyle,
+			x,
+			y,
+			nWidth,
+			nHeight,
+			hWndParent,
+			hMenu,
+			hInstance,
+			lpParam
+		);
 
-PROXY_EXPORTS void *ProxyLog() {
-	return &log_file;
-}
+		sf::ContextSettings cs;
+		cs.majorVersion = 3;
+		cs.minorVersion = 3;
 
-PROXY_EXPORTS void *Config() {
-	return &_config;
+		window->create(hWnd, cs);
+
+		return hWnd;
+	}
+
+	void ReloadConfig() {
+		std::ifstream cfg_file;
+		cfg_file.open("config.json");
+		_config << cfg_file;
+	}
+
+	const json &GetConfig() {
+		return _config;
+	}
+
+	HRESULT DirectDrawProxyCreate(
+		DirectDrawCreatePtr _DirectDrawCreate,
+		GUID *lpGUID,
+		LPDIRECTDRAW *lplpDD,
+		IUnknown     *pUnkOuter
+	) {
+		auto ddp = new DirectDrawProxy();
+
+		*lplpDD = (IDirectDraw *)ddp;
+
+		return S_OK;
+	}
+};
+
+PROXY_EXPORTS IProxy *GetProxy() {
+	static Proxy *proxy = nullptr;
+	if (!proxy) {
+		proxy = new Proxy();
+	}
+	return proxy;
 }

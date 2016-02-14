@@ -10,6 +10,8 @@ HINSTANCE hLThis = 0;
 HINSTANCE hL = 0;
 FARPROC p[22] = { 0 };
 
+#define PROXY(a)
+
 BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 {
 	if (reason == DLL_PROCESS_ATTACH)
@@ -79,7 +81,7 @@ extern "C" HRESULT WINAPI __E__7__(
 
 	F _DirectDrawCreate = (F)p[7];
 
-	return DirectDrawProxyCreate(_DirectDrawCreate, lpGUID, lplpDD, pUnkOuter);
+	return GetProxy()->DirectDrawProxyCreate(_DirectDrawCreate, lpGUID, lplpDD, pUnkOuter);
 }
 
 // AcquireDDThreadLock

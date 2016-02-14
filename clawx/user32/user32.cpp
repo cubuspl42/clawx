@@ -3,6 +3,8 @@
 #include "../proxy/proxy.h"
 #include <windows.h>
 
+#define config (GetProxy()->GetConfig())
+
 #pragma pack(1)
 
 HINSTANCE hLThis = 0;
@@ -1050,17 +1052,13 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 	}
 	else if (reason == DLL_PROCESS_DETACH)
 	{
-		log(DLL_NAME, "DLL_PROCESS_DETACH");
 		FreeLibrary(hL);
 	}
 	else if (reason == DLL_THREAD_ATTACH) {
-		// log(DLL_NAME, "DLL_THREAD_ATTACH");
 	}
 	else if (reason == DLL_THREAD_DETACH) {
-		// log(DLL_NAME, "DLL_THREAD_DETACH");
 	}
 	else {
-		log(DLL_NAME " ??? ", reason);
 	}
 	return 1;
 }
@@ -2206,19 +2204,21 @@ extern "C" HWND WINAPI __E__112__(
 
 	F _CreateWindowExA = (F)p[112];
 
-	nWidth = config["CreateWindowExA_nWidth"];
-	nHeight = config["CreateWindowExA_nHeight"];
-
-	bool disable_style = config["CreateWindowExA_disable_style"];
-
-	if (disable_style) {
-		dwExStyle = 0;
-		dwStyle = 0;
-	}
-
-	HWND hWnd = _CreateWindowExA(dwExStyle, lpClassName, lpWindowName, dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
-
-	SetHwnd(hWnd);
+	HWND hWnd = GetProxy()->CreateWindowExA(
+		_CreateWindowExA,
+		dwExStyle,
+		lpClassName,
+		lpWindowName,
+		dwStyle, // WS_SYSMENU | WS_POPUP 
+		x,
+		y,
+		nWidth,
+		nHeight,
+		hWndParent,
+		hMenu,
+		hInstance,
+		lpParam
+	);
 
 	return hWnd;
 }

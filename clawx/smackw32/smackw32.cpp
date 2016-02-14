@@ -9,6 +9,8 @@ HINSTANCE hLThis = 0;
 HINSTANCE hL = 0;
 FARPROC p[39] = { 0 };
 
+#define PROXY(a)
+
 BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 {
 	if (reason == DLL_PROCESS_ATTACH)

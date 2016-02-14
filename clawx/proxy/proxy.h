@@ -1,13 +1,9 @@
 #pragma once
 
-#include <windows.h>
-#include <ddraw.h>
-
 #include "json.hpp"
 
-#define config (*((nlohmann::json*)Config()))
-
-#include "log.h"
+#include <windows.h>
+#include <ddraw.h>
 
 #ifdef PROXY_EXPORTS
 #define PROXY_EXPORTS __declspec(dllexport)
@@ -17,15 +13,38 @@
 
 using DirectDrawCreatePtr = decltype(&DirectDrawCreate);
 
-PROXY_EXPORTS HRESULT DirectDrawProxyCreate(
-	DirectDrawCreatePtr _DirectDrawCreate,
-	GUID *lpGUID,
-	LPDIRECTDRAW *lplpDD,
-	IUnknown     *pUnkOuter
-);
+class IProxy {
+public:
+	virtual ~IProxy() {}
 
-PROXY_EXPORTS void SetHwnd(HWND hWnd);
+	using CreateWindowExA_type = decltype(CreateWindowExA);
 
-PROXY_EXPORTS void *ProxyLog();
+	virtual HWND CreateWindowExA(
+		CreateWindowExA_type _CreateWindowExA,
+		DWORD     dwExStyle,
+		LPCTSTR   lpClassName,
+		LPCTSTR   lpWindowName,
+		DWORD     dwStyle,
+		int       x,
+		int       y,
+		int       nWidth,
+		int       nHeight,
+		HWND      hWndParent,
+		HMENU     hMenu,
+		HINSTANCE hInstance,
+		LPVOID    lpParam
+	) = 0;
 
-PROXY_EXPORTS void *Config();
+	virtual void ReloadConfig() = 0;
+
+	virtual const nlohmann::json &GetConfig() = 0;
+
+	virtual HRESULT DirectDrawProxyCreate(
+		DirectDrawCreatePtr _DirectDrawCreate,
+		GUID *lpGUID,
+		LPDIRECTDRAW *lplpDD,
+		IUnknown     *pUnkOuter
+	) = 0;
+};
+
+PROXY_EXPORTS IProxy *GetProxy();

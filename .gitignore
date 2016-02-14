@@ -4,9 +4,12 @@
 *.filters
 *.user
 *.dll
+*.vspx
 .vs/
 doc/
 Debug/
 Release/
 ipch/
 SFML*/
+glfw*/
+glew*/

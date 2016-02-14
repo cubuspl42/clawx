@@ -9,6 +9,8 @@ HINSTANCE hLThis = 0;
 HINSTANCE hL = 0;
 FARPROC p[879] = { 0 };
 
+#define PROXY(a)
+
 BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 {
 	if (reason == DLL_PROCESS_ATTACH)
@@ -904,17 +906,13 @@ BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 	}
 	else if (reason == DLL_PROCESS_DETACH)
 	{
-		log(DLL_NAME, "DLL_PROCESS_DETACH");
 		FreeLibrary(hL);
 	}
 	else if (reason == DLL_THREAD_ATTACH) {
-		// log(DLL_NAME, "DLL_THREAD_ATTACH");
 	}
 	else if (reason == DLL_THREAD_DETACH) {
-		// log(DLL_NAME, "DLL_THREAD_DETACH");
 	}
 	else {
-		log(DLL_NAME " ??? ", reason);
 	}
 
 	return 1;
