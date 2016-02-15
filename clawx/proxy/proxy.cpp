@@ -3,6 +3,7 @@
 // Include GLEW
 #include <GL/glew.h>
 
+#include "log.h"
 #include "proxy.h"
 #include "dump.h"
 
@@ -12,7 +13,9 @@
 #include <SFML/Window.hpp>
 #include <SFML/OpenGL.hpp>
 
-#include "shader.hpp"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include <fstream>
 #include <unordered_map>
@@ -126,7 +129,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 	}
 };
 
-#define DDRAW_SURFACE_PROXY(method)
+#define DDRAW_SURFACE_PROXY(method) log_call("DirectDrawSurfaceProxy", #method, this);
 
 #define _DDSCL_NORMAL 0
 
@@ -158,6 +161,8 @@ DirectDrawSurfaceProxy *back_buffer;
 
 std::vector<char> buffer(1920 * 1080 * 4);
 
+GLuint shaderProgram;
+
 class DirectDrawSurfaceProxy : public IDirectDrawSurface3
 {
 public:
@@ -178,13 +183,10 @@ public:
 
 	std::vector<UCHAR> indexed_buffer;
 
-	GLuint tex;
-
-	GLuint VertexArrayID;
-	GLuint programID;
-	GLuint vertexbuffer;
-
 	DirectDrawPaletteProxy *ddpp = nullptr;
+
+	GLuint vao;
+	GLuint texture;
 
 	DirectDrawSurfaceProxy(DirectDrawProxy *ddp, Kind kind, size_t d_h, int width, int height, int pitch) {
 		this->ddp = ddp;
@@ -196,34 +198,57 @@ public:
 
 		indexed_buffer.resize(640 * 480 * 4); // ...
 
-		glGenVertexArrays(1, &VertexArrayID);
-		glBindVertexArray(VertexArrayID);
+											  // Create Vertex Array Object
+		glGenVertexArrays(1, &vao);
+		glBindVertexArray(vao);
 
-		// Create and compile our GLSL program from the shaders
-		programID = LoadShaders("SimpleVertexShader.vertexshader", "SimpleFragmentShader.fragmentshader");
+		// Create an element array
+		GLuint ebo;
+		glGenBuffers(1, &ebo);
 
-		static const GLfloat g_vertex_buffer_data[] = {
-			-1.0f, -1.0f, 0.0f,
-			1.0f, -1.0f, 0.0f,
-			0.0f,  1.0f, 0.0f,
+		GLuint elements[] = {
+			0, 1, 2,
+			2, 3, 0
 		};
 
-		glGenBuffers(1, &vertexbuffer);
-		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elements), elements, GL_STATIC_DRAW);
 
-		// texture
+		// Create a Vertex Buffer Object and copy the vertex data to it
+		GLuint vbo;
+		glGenBuffers(1, &vbo);
 
-		glGenTextures(1, &tex);
+		GLfloat vertices[] = {
+			//  Position      Texcoords
+			0,  0, 0.0f, 0.0f, // Top-left
+			width,  0, 1.0f, 0.0f, // Top-right
+			width, height, 1.0f, 1.0f, // Bottom-right
+			0, height, 0.0f, 1.0f  // Bottom-left
+		};
 
-		glBindTexture(GL_TEXTURE_2D, tex);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+		// Specify the layout of the vertex data
+		GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
+		glEnableVertexAttribArray(posAttrib);
+		glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), 0);
+
+		GLint texAttrib = glGetAttribLocation(shaderProgram, "texcoord");
+		glEnableVertexAttribArray(texAttrib);
+		glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
+
+
+		// Load textures
+		glGenTextures(1, &texture);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, texture);
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-
 	}
 
 	/*** IUnknown methods ***/
@@ -251,6 +276,23 @@ public:
 		DDRAW_SURFACE_PROXY(AddOverlayDirtyRect);
 		return PROXY_UNIMPLEMENTED();
 	}
+
+	void Draw(int x, int y) {
+		glm::mat4 pos;
+		pos = glm::translate(pos, { x + 0.5, y + 0.5, 0 });
+		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "pos"), 1, GL_FALSE, glm::value_ptr(pos));
+
+		glm::mat2 surface_m;
+		surface_m = { float(width) / pitch, 0, 0, 1 };
+		glUniformMatrix2fv(glGetUniformLocation(shaderProgram, "surface_m"), 1, GL_FALSE, glm::value_ptr(surface_m));
+
+		glBindVertexArray(vao);
+
+		glBindTexture(GL_TEXTURE_2D, texture);
+
+		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+	}
+
 	STDMETHOD(Blt)(
 		 LPRECT               lpDestRect,
 		 LPDIRECTDRAWSURFACE3 lpDDSrcSurface,
@@ -314,31 +356,9 @@ public:
 			//y -= lpSrcRect->top;
 		}
 
-		DirectDrawSurfaceProxy *ddsd = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
+		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
 
-		return S_OK; // <------
-
-		//dump("_bltfast");
-
-		// Use our shader
-		glUseProgram(programID);
-
-		// 1rst attribute buffer : vertices
-		glEnableVertexAttribArray(0);
-		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-		glVertexAttribPointer(
-			0,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
-			3,                  // size
-			GL_FLOAT,           // type
-			GL_FALSE,           // normalized?
-			0,                  // stride
-			(void*)0            // array buffer offset
-		);
-
-		// Draw the triangle !
-		glDrawArrays(GL_TRIANGLES, 0, 3); // 3 indices starting at 0 -> 1 triangle
-
-		glDisableVertexAttribArray(0);
+		ddsp->Draw(x, y);
 
 		return S_OK;
 	}
@@ -363,14 +383,9 @@ public:
 		if (i % 5 == 0)
 			GetProxy()->ReloadConfig();
 
-		// Clear the screen to black
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
-
-		// Draw a rectangle from the 2 triangles using 6 indices
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
 		window->display();
+
+		glClear(GL_COLOR_BUFFER_BIT);
 
 		return S_OK;
 	}
@@ -529,6 +544,9 @@ public:
 	STDMETHOD(Unlock)(THIS_ LPVOID a) {
 		DDRAW_SURFACE_PROXY(Unlock);
 
+		glBindTexture(GL_TEXTURE_2D, texture);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, pitch, height, 0, GL_RED, GL_UNSIGNED_BYTE, indexed_buffer.data());
+
 		//dump("_unlock");
 			
 		return S_OK;
@@ -565,7 +583,7 @@ public:
 	}
 };
 
-#define DDRAW_PROXY(method)
+#define DDRAW_PROXY(method) log_call("DirectDrawProxy", #method, this);
 
 struct DirectDrawProxy : public IDirectDraw2
 {
@@ -579,67 +597,32 @@ struct DirectDrawProxy : public IDirectDraw2
 
 	DirectDrawProxy() {
 		// Shader sources
-		static const GLchar* vertexSource =
+		const GLchar* vertexSource =
 			"#version 150 core\n"
 			"in vec2 position;"
-			"in vec3 color;"
 			"in vec2 texcoord;"
-			"out vec3 Color;"
 			"out vec2 Texcoord;"
+			"uniform mat4 trans;"
+			"uniform mat4 pos;"
 			"void main()"
 			"{"
-			"    Color = color;"
 			"    Texcoord = texcoord;"
-			"    gl_Position = vec4(position, 0.0, 1.0);"
+			"    gl_Position = trans * pos * vec4(position, 0.0, 1.0);"
 			"}";
-
-		static const GLchar* fragmentSource =
+		const GLchar* fragmentSource =
 			"#version 150 core\n"
-			"in vec3 Color;"
 			"in vec2 Texcoord;"
 			"out vec4 outColor;"
-			"uniform sampler2D texKitten;"
-			"uniform sampler2D texPuppy;"
+			"uniform mat2 surface_m;"
+			"uniform sampler2D surface_texture;"
 			"void main()"
 			"{"
-			"    outColor = mix(texture(texKitten, Texcoord), texture(texPuppy, Texcoord), 0.5);"
+			"    outColor = texture(surface_texture, surface_m * Texcoord);"
 			"}";
 
 		// Initialize GLEW
 		glewExperimental = GL_TRUE;
 		glewInit();
-
-		// Create Vertex Array Object
-		GLuint vao;
-		glGenVertexArrays(1, &vao);
-		glBindVertexArray(vao);
-
-		// Create a Vertex Buffer Object and copy the vertex data to it
-		GLuint vbo;
-		glGenBuffers(1, &vbo);
-
-		GLfloat vertices[] = {
-			//  Position      Color             Texcoords
-			-0.5f,  0.5f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, // Top-left
-			0.5f,  0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, // Top-right
-			0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, // Bottom-right
-			-0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f  // Bottom-left
-		};
-
-		glBindBuffer(GL_ARRAY_BUFFER, vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-		// Create an element array
-		GLuint ebo;
-		glGenBuffers(1, &ebo);
-
-		GLuint elements[] = {
-			0, 1, 2,
-			2, 3, 0
-		};
-
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elements), elements, GL_STATIC_DRAW);
 
 		// Create and compile the vertex shader
 		GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -652,87 +635,24 @@ struct DirectDrawProxy : public IDirectDraw2
 		glCompileShader(fragmentShader);
 
 		// Link the vertex and fragment shader into a shader program
-		GLuint shaderProgram = glCreateProgram();
+		shaderProgram = glCreateProgram();
 		glAttachShader(shaderProgram, vertexShader);
 		glAttachShader(shaderProgram, fragmentShader);
 		glBindFragDataLocation(shaderProgram, 0, "outColor");
 		glLinkProgram(shaderProgram);
 		glUseProgram(shaderProgram);
 
-		// Specify the layout of the vertex data
-		GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
-		glEnableVertexAttribArray(posAttrib);
-		glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(GLfloat), 0);
+		glm::mat4 trans;
+		trans = glm::translate(trans, { -1, 1, 0 });
+		trans = glm::scale(trans, { 1, -1, 1 });
+		float sx = 1 / 640.f * 2;
+		float sy = 1 / 480.f * 2;
+		trans = glm::scale(trans, { sx, sy, 1 });
 
-		GLint colAttrib = glGetAttribLocation(shaderProgram, "color");
-		glEnableVertexAttribArray(colAttrib);
-		glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
+		GLint uniTrans = glGetUniformLocation(shaderProgram, "trans");
+		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(trans));
 
-		GLint texAttrib = glGetAttribLocation(shaderProgram, "texcoord");
-		glEnableVertexAttribArray(texAttrib);
-		glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(GLfloat), (void*)(5 * sizeof(GLfloat)));
-
-		// Load textures
-		GLuint textures[2];
-		glGenTextures(2, textures);
-
-		int width = 64, height = 64;
-
-		std::vector<UCHAR> im;
-
-		for (int i = 0; i < width * height * 3; ++i) {
-			im.push_back(rand());
-		}
-
-		unsigned char* image = im.data();
-
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, textures[0]);
-
-#if 0
-		image = SOIL_load_image("sample.png", &width, &height, 0, SOIL_LOAD_RGB);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
-		SOIL_free_image_data(image);
-#endif
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
-
-		glUniform1i(glGetUniformLocation(shaderProgram, "texKitten"), 0);
-
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, textures[1]);
-
-#if 0
-		image = SOIL_load_image("sample2.png", &width, &height, 0, SOIL_LOAD_RGB);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
-		SOIL_free_image_data(image);
-#endif
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
-
-		glUniform1i(glGetUniformLocation(shaderProgram, "texPuppy"), 1);
-
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-		while (false)
-		{
-			// Clear the screen to black
-			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT);
-
-			// Draw a rectangle from the 2 triangles using 6 indices
-			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-			// Swap buffers
-			window->display();
-		}
-
+		glUniform1i(glGetUniformLocation(shaderProgram, "surface_texture"), 0);
 	}
 
 	/*** IUnknown methods ***/
@@ -887,11 +807,15 @@ struct DirectDrawProxy : public IDirectDraw2
 
 class Proxy : public IProxy {
 	json _config;
+	std::ofstream _log;
 
 public:
 
 	Proxy() {
 		ReloadConfig();
+
+		std::string log_filename = _config["log_filename"];
+		_log.open(log_filename.c_str());
 
 		window = new sf::Window;
 	}
@@ -937,17 +861,10 @@ public:
 
 		window->create(hWnd);
 
+		bool vsync = config["vsync"];
+		window->setVerticalSyncEnabled(vsync);
+
 		return hWnd;
-	}
-
-	void ReloadConfig() {
-		std::ifstream cfg_file;
-		cfg_file.open("config.json");
-		_config << cfg_file;
-	}
-
-	const json &GetConfig() {
-		return _config;
 	}
 
 	HRESULT DirectDrawProxyCreate(
@@ -961,6 +878,21 @@ public:
 		*lplpDD = (IDirectDraw *)ddp;
 
 		return S_OK;
+	}
+
+	void ReloadConfig() {
+		std::ifstream cfg_file;
+		cfg_file.open("config.json");
+		_config << cfg_file;
+	}
+
+	const json &GetConfig() {
+		return _config;
+	}
+
+	void Log(std::string s) {
+		_log << s;
+		_log.flush();
 	}
 };
 

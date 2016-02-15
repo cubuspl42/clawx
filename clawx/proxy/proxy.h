@@ -35,16 +35,18 @@ public:
 		LPVOID    lpParam
 	) = 0;
 
-	virtual void ReloadConfig() = 0;
-
-	virtual const nlohmann::json &GetConfig() = 0;
-
 	virtual HRESULT DirectDrawProxyCreate(
 		DirectDrawCreatePtr _DirectDrawCreate,
 		GUID *lpGUID,
 		LPDIRECTDRAW *lplpDD,
 		IUnknown     *pUnkOuter
 	) = 0;
+
+	virtual void ReloadConfig() = 0;
+
+	virtual const nlohmann::json &GetConfig() = 0;
+
+	virtual void Log(std::string s) = 0;
 };
 
 PROXY_EXPORTS IProxy *GetProxy();

@@ -91,9 +91,9 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>GLEW_STATIC;WIN32;_DEBUG;_WINDOWS;_USRDLL;PROXY_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SFML_STATIC;GLEW_STATIC;WIN32;_DEBUG;_WINDOWS;_USRDLL;PROXY_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>false</MinimalRebuild>
-      <AdditionalIncludeDirectories>$(ProjectDir)SFML-2.3.2\include;$(ProjectDir)glew-1.13.0\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)glm;$(ProjectDir)SFML-2.3.2\include;$(ProjectDir)glew-1.13.0\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -123,8 +123,8 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>GLEW_STATIC;WIN32;NDEBUG;_WINDOWS;_USRDLL;PROXY_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)SFML-2.3.2\include;$(ProjectDir)glew-1.13.0\include</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>SFML_STATIC;GLEW_STATIC;WIN32;NDEBUG;_WINDOWS;_USRDLL;PROXY_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)glm;$(ProjectDir)SFML-2.3.2\include;$(ProjectDir)glew-1.13.0\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -175,6 +175,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dump.h" />
+    <ClInclude Include="log.h" />
     <ClInclude Include="proxy.h" />
     <ClInclude Include="proxydb.h" />
     <ClInclude Include="shader.hpp" />
