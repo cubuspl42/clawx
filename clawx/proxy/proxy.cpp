@@ -70,8 +70,10 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 		glGenTextures(1, &texture);
 
 		glBindTexture(GL_TEXTURE_1D, texture);
-		//glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		//glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+		assert(!glGetError());
 	}
 
 	/*** IUnknown methods ***/
@@ -126,7 +128,9 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 		texture_data[0] = texture_data[1] = texture_data[2] = texture_data[3] = 0;
 
 		glBindTexture(GL_TEXTURE_1D, texture);
-		glTexImage1D(texture, 0, GL_RGBA, PALETTE_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data.data());
+		glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, PALETTE_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data.data());
+
+		assert(!glGetError());
 	}
 
 	STDMETHOD(SetEntries)(
@@ -143,7 +147,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 			entries[i] = lpEntries[i];
 		}
 
-		//UpdateTexture();
+		UpdateTexture();
 
 		return S_OK;
 	}
@@ -197,6 +201,7 @@ void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp);
 std::vector<char> buffer(1920 * 1080 * 4);
 
 GLuint shaderProgram;
+GLuint shaderProgram2;
 
 class DirectDrawSurfaceProxy : public IDirectDrawSurface3
 {
@@ -257,7 +262,7 @@ public:
 		glGenBuffers(1, &vbo);
 
 		int L = 0;
-		int R = 1;
+		float R = float(width) / pitch;
 		int T = 0;
 		int B = 1;
 
@@ -272,12 +277,14 @@ public:
 		glBindBuffer(GL_ARRAY_BUFFER, vbo);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
+		GLuint program = (kind == FRONT_BUFFER) ? shaderProgram2 : shaderProgram;
+
 		// Specify the layout of the vertex data
-		GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
+		GLint posAttrib = glGetAttribLocation(program, "position");
 		glEnableVertexAttribArray(posAttrib);
 		glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), 0);
 
-		GLint texAttrib = glGetAttribLocation(shaderProgram, "texcoord");
+		GLint texAttrib = glGetAttribLocation(program, "texcoord");
 		glEnableVertexAttribArray(texAttrib);
 		glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
 
@@ -287,17 +294,19 @@ public:
 
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, texture);
-
+		
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, pitch, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+
+		assert(!glGetError());
 	}
 
 	void GenFramebuffer() {
-		if (kind != FRONT_BUFFER && frameBuffer == 0) {
+		if (frameBuffer == 0) {
 			glGenFramebuffers(1, &frameBuffer);
 			glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
@@ -335,17 +344,25 @@ public:
 	}
 
 	void Draw(GLuint frameBuffer, int x, int y, GLuint palette_texture) {
+		GLuint program = palette_texture ? shaderProgram2 : shaderProgram;
+
+		glUseProgram(program);
 		glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
+
+		assert(!glGetError());
 
 		glm::mat4 pos;
 		pos = glm::translate(pos, { x + 0.5, y + 0.5, 0 });
-		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "pos"), 1, GL_FALSE, glm::value_ptr(pos));
+		glUniformMatrix4fv(glGetUniformLocation(program, "pos"), 1, GL_FALSE, glm::value_ptr(pos));
 
-		glm::mat2 surface_m;
-		surface_m = { float(width) / pitch, 0, 0, 1 };
-		glUniformMatrix2fv(glGetUniformLocation(shaderProgram, "surface_m"), 1, GL_FALSE, glm::value_ptr(surface_m));
+		assert(!glGetError());
 
 		glm::mat4 trans;
+
+		float sx = 1 / 640.f;
+		float sy = 1 / 480.f;
+
+		trans = glm::scale(trans, { sx, sy, 1 });
 
 		if (frameBuffer == 0) {
 			trans = glm::scale(trans, { 1, -1, 1 });
@@ -353,22 +370,28 @@ public:
 
 		trans = glm::translate(trans, { -1, -1, 0 });
 		
-		float sx = 1 / 640.f * 2;
-		float sy = 1 / 480.f * 2;
-		trans = glm::scale(trans, { sx, sy, 1 });
 
-		GLint uniTrans = glGetUniformLocation(shaderProgram, "trans");
+
+		GLint uniTrans = glGetUniformLocation(program, "trans");
 		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(trans));
+
+		assert(!glGetError());
 
 		glBindVertexArray(vao);
 
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, texture);
 
-		//glActiveTexture(GL_TEXTURE1);
-		//glBindTexture(GL_TEXTURE_1D, palette_texture);
+		assert(!glGetError());
 
+		if (palette_texture) {
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_1D, palette_texture);
+		}
+	
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+		assert(!glGetError());
 	}
 
 	HRESULT BltGeneric(int x, int y, LPDIRECTDRAWSURFACE3 dds) {
@@ -379,7 +402,7 @@ public:
 		}));
 
 		//ddsp->Dump();
-		//this->Dump();
+		this->Dump();
 
 		if (kind == NORMAL_SURFACE) {
 			return S_OK; // ???
@@ -414,8 +437,8 @@ public:
 		}
 
 		if (lpSrcRect) {
-			//x -= lpSrcRect->left;
-			//y -= lpSrcRect->top;
+			x -= lpSrcRect->left;
+			y -= lpSrcRect->top;
 		}
 
 		return BltGeneric(x, y, lpDDSrcSurface);
@@ -439,8 +462,8 @@ public:
 		int y = dwY;
 
 		if (lpSrcRect) {
-			//x -= lpSrcRect->left;
-			//y -= lpSrcRect->top;
+			x -= lpSrcRect->left;
+			y -= lpSrcRect->top;
 		}
 
 		return BltGeneric(x, y, lpDDSrcSurface);
@@ -467,15 +490,20 @@ public:
 	STDMETHOD(Flip)(THIS_ LPDIRECTDRAWSURFACE3 a, DWORD b) {
 		DDRAW_SURFACE_PROXY(Flip);
 
-		assert(kint == FRONT_BUFFER);
+		assert(kind == FRONT_BUFFER);
 
 		static int i = 0;
 		++i;
 		if (i % 5 == 0)
 			GetProxy()->ReloadConfig();
 
-		back_buffer->Draw(0, 0, 0, 0);
+		GenFramebuffer();
+
+		back_buffer->Draw(frameBuffer, 0, 0, 0);
 		back_buffer->Clear();
+
+		if(ddpp)
+			Draw(0, 0, 0, ddpp->texture);
 
 		window->display();
 
@@ -577,6 +605,8 @@ public:
 
 		//dump("_lock");
 
+		assert(!glGetError());
+
 		return S_OK;
 	}
 	STDMETHOD(ReleaseDC)(THIS_ HDC a) {
@@ -649,8 +679,12 @@ public:
 		glBindTexture(GL_TEXTURE_2D, texture);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, pitch, height, 0, GL_RED, GL_UNSIGNED_BYTE, indexed_buffer.data());
 
+		assert(!glGetError());
+
+
 		if (kind == FRONT_BUFFER) {
-			Draw(0, 0, 0, 0);
+			assert(ddpp && ddpp->texture);
+			Draw(0, 0, 0, ddpp->texture);
 		}
 		//dump("_unlock");
 
@@ -735,28 +769,59 @@ struct DirectDrawProxy : public IDirectDraw2
 			"#version 150 core\n"
 			"in vec2 Texcoord;"
 			"out vec4 outColor;"
-			"uniform mat2 surface_m;"
 			"uniform sampler2D surface_texture;"
-			//"uniform sampler1D palette_texture;"
 			"void main()"
 			"{"
-			//"    outColor = palette_texture(0.5 + texture(surface_texture, surface_m * Texcoord).r);"
-			"    outColor = texture(surface_texture, surface_m * Texcoord);"
+			"    outColor = texture(surface_texture, Texcoord);"
+			"}";
+		// Shader sources
+
+		const GLchar* fragmentSource2 =
+			"#version 150 core\n"
+			"in vec2 Texcoord;"
+			"out vec4 outColor;"
+			"uniform sampler2D surface_texture;"
+			"uniform sampler1D palette_texture;"
+			"void main()"
+			"{"
+			"    outColor = texture(palette_texture, texture(surface_texture, Texcoord).r);"
 			"}";
 
 		// Initialize GLEW
 		glewExperimental = GL_TRUE;
 		glewInit();
 
+		assert(!glGetError());
+
 		// Create and compile the vertex shader
 		GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
 		glShaderSource(vertexShader, 1, &vertexSource, NULL);
 		glCompileShader(vertexShader);
 
+		assert(!glGetError());
+
+		char vertexShaderLog[1024];
+		glGetShaderInfoLog(vertexShader, 1024, NULL, vertexShaderLog);
+
 		// Create and compile the fragment shader
 		GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 		glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
 		glCompileShader(fragmentShader);
+
+		assert(!glGetError());
+
+		char fragmentShaderLog[1024];
+		glGetShaderInfoLog(fragmentShader, 1024, NULL, fragmentShaderLog);
+
+		// Create and compile the fragment shader
+		GLuint fragmentShader2 = glCreateShader(GL_FRAGMENT_SHADER);
+		glShaderSource(fragmentShader2, 1, &fragmentSource2, NULL);
+		glCompileShader(fragmentShader2);
+
+		assert(!glGetError());
+
+		char fragmentShader2Log[1024];
+		glGetShaderInfoLog(fragmentShader2, 1024, NULL, fragmentShader2Log);
 
 		// Link the vertex and fragment shader into a shader program
 		shaderProgram = glCreateProgram();
@@ -766,8 +831,40 @@ struct DirectDrawProxy : public IDirectDraw2
 		glLinkProgram(shaderProgram);
 		glUseProgram(shaderProgram);
 
-		glUniform1i(glGetUniformLocation(shaderProgram, "surface_texture"), 0);
-		//glUniform1i(glGetUniformLocation(shaderProgram, "palette_texture"), 1);
+		assert(!glGetError());
+
+		char shaderProgramLog[1024];
+		glGetProgramInfoLog(shaderProgram, 1024, NULL, shaderProgramLog);
+
+
+		assert(!glGetError());
+
+		auto u = glGetUniformLocation(shaderProgram, "surface_texture");
+		glUniform1i(u, 0);
+
+		assert(!glGetError());
+
+		shaderProgram2 = glCreateProgram();
+		glAttachShader(shaderProgram2, vertexShader);
+		glAttachShader(shaderProgram2, fragmentShader2);
+		glBindFragDataLocation(shaderProgram2, 0, "outColor");
+		glLinkProgram(shaderProgram2);
+		glUseProgram(shaderProgram2);
+
+		assert(!glGetError());
+
+		char shaderProgram2Log[1024];
+		glGetProgramInfoLog(shaderProgram2, 1024, NULL, shaderProgram2Log);
+
+		u = glGetUniformLocation(shaderProgram2, "surface_texture");
+		glUniform1i(u, 0);
+
+		assert(!glGetError());
+
+		u = glGetUniformLocation(shaderProgram2, "palette_texture");
+		glUniform1i(u, 1);
+
+		assert(!glGetError());
 	}
 
 	/*** IUnknown methods ***/
@@ -795,11 +892,18 @@ struct DirectDrawProxy : public IDirectDraw2
 		DDRAW_PROXY(CreateClipper);
 		return PROXY_UNIMPLEMENTED();
 	}
-	STDMETHOD(CreatePalette)(THIS_ DWORD a, LPPALETTEENTRY b, LPDIRECTDRAWPALETTE FAR* out_ddp, IUnknown FAR *d) {
+	STDMETHOD(CreatePalette)(
+			DWORD                   dwFlags,
+			LPPALETTEENTRY          lpDDColorArray,
+			LPDIRECTDRAWPALETTE FAR *lplpDDPalette,
+			IUnknown FAR            *pUnkOuter
+	) {
 		DDRAW_PROXY(CreatePalette);
 
 		auto ddpp = new DirectDrawPaletteProxy();
-		*out_ddp = ddpp;
+		*lplpDDPalette = ddpp;
+
+		ddpp->SetEntries(dwFlags, 0, 256, lpDDColorArray);
 		
 		return S_OK;
 	}
