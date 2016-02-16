@@ -222,6 +222,7 @@ public:
 
 	GLuint vao;
 	GLuint texture;
+	GLuint frameBuffer = 0;
 
 	DirectDrawSurfaceProxy(DirectDrawProxy *ddp, Kind kind, size_t d_h, int width, int height, int pitch) {
 		this->ddp = ddp;
@@ -255,12 +256,17 @@ public:
 		GLuint vbo;
 		glGenBuffers(1, &vbo);
 
+		int L = 0;
+		int R = 1;
+		int T = 0;
+		int B = 1;
+
 		GLfloat vertices[] = {
 			//  Position      Texcoords
-			0,  0, 0.0f, 0.0f, // Top-left
-			width,  0, 1.0f, 0.0f, // Top-right
-			width, height, 1.0f, 1.0f, // Bottom-right
-			0, height, 0.0f, 1.0f  // Bottom-left
+			0,		0,		L, T, // Top-left
+			width,	0,		R, T, // Top-right
+			width,	height, R, B, // Bottom-right
+			0,		height, L, B  // Bottom-left
 		};
 
 		glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -286,6 +292,16 @@ public:
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, pitch, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+	}
+
+	void GenFramebuffer() {
+		if (kind != FRONT_BUFFER && frameBuffer == 0) {
+			glGenFramebuffers(1, &frameBuffer);
+			glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
+		}
 	}
 
 	/*** IUnknown methods ***/
@@ -318,7 +334,9 @@ public:
 		log(img_dump(pitch, height, indexed_buffer.data()));
 	}
 
-	void Draw(int x, int y, GLuint palette_texture) {
+	void Draw(GLuint frameBuffer, int x, int y, GLuint palette_texture) {
+		glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
+
 		glm::mat4 pos;
 		pos = glm::translate(pos, { x + 0.5, y + 0.5, 0 });
 		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "pos"), 1, GL_FALSE, glm::value_ptr(pos));
@@ -326,6 +344,21 @@ public:
 		glm::mat2 surface_m;
 		surface_m = { float(width) / pitch, 0, 0, 1 };
 		glUniformMatrix2fv(glGetUniformLocation(shaderProgram, "surface_m"), 1, GL_FALSE, glm::value_ptr(surface_m));
+
+		glm::mat4 trans;
+
+		if (frameBuffer == 0) {
+			trans = glm::scale(trans, { 1, -1, 1 });
+		}
+
+		trans = glm::translate(trans, { -1, -1, 0 });
+		
+		float sx = 1 / 640.f * 2;
+		float sy = 1 / 480.f * 2;
+		trans = glm::scale(trans, { sx, sy, 1 });
+
+		GLint uniTrans = glGetUniformLocation(shaderProgram, "trans");
+		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(trans));
 
 		glBindVertexArray(vao);
 
@@ -345,13 +378,16 @@ public:
 			{ "x", x },{ "y", y }
 		}));
 
-		ddsp->Dump();
+		//ddsp->Dump();
+		//this->Dump();
 
 		if (kind == NORMAL_SURFACE) {
-			return S_OK;
+			return S_OK; // ???
 		}
 
-		ddsp->Draw(x, y, 0);
+		GenFramebuffer();
+
+		ddsp->Draw(frameBuffer, x, y, 0);
 
 		return S_OK;
 	}
@@ -422,13 +458,24 @@ public:
 		DDRAW_SURFACE_PROXY(EnumOverlayZOrders);
 		return PROXY_UNIMPLEMENTED();
 	}
+	
+	void Clear() {
+		glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
+
 	STDMETHOD(Flip)(THIS_ LPDIRECTDRAWSURFACE3 a, DWORD b) {
 		DDRAW_SURFACE_PROXY(Flip);
+
+		assert(kint == FRONT_BUFFER);
 
 		static int i = 0;
 		++i;
 		if (i % 5 == 0)
 			GetProxy()->ReloadConfig();
+
+		back_buffer->Draw(0, 0, 0, 0);
+		back_buffer->Clear();
 
 		window->display();
 
@@ -516,6 +563,11 @@ public:
 	STDMETHOD(Lock)(THIS_ LPRECT a, LPDDSURFACEDESC b, DWORD c, HANDLE d) {
 		DDRAW_SURFACE_PROXY(Lock);
 
+		if (frameBuffer) {
+			glBindTexture(GL_TEXTURE_2D, texture);
+			glGetTexImage(GL_TEXTURE_2D, 0, GL_RED, GL_UNSIGNED_BYTE, indexed_buffer.data());
+		}
+
 		Load("Lock_" + std::to_string(d_h), b);
 		b->dwWidth = width;
 		b->dwHeight = height;
@@ -597,9 +649,12 @@ public:
 		glBindTexture(GL_TEXTURE_2D, texture);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, pitch, height, 0, GL_RED, GL_UNSIGNED_BYTE, indexed_buffer.data());
 
+		if (kind == FRONT_BUFFER) {
+			Draw(0, 0, 0, 0);
+		}
 		//dump("_unlock");
 
-		Dump();
+		//Dump();
 			
 		return S_OK;
 	}
@@ -710,16 +765,6 @@ struct DirectDrawProxy : public IDirectDraw2
 		glBindFragDataLocation(shaderProgram, 0, "outColor");
 		glLinkProgram(shaderProgram);
 		glUseProgram(shaderProgram);
-
-		glm::mat4 trans;
-		trans = glm::translate(trans, { -1, 1, 0 });
-		trans = glm::scale(trans, { 1, -1, 1 });
-		float sx = 1 / 640.f * 2;
-		float sy = 1 / 480.f * 2;
-		trans = glm::scale(trans, { sx, sy, 1 });
-
-		GLint uniTrans = glGetUniformLocation(shaderProgram, "trans");
-		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(trans));
 
 		glUniform1i(glGetUniformLocation(shaderProgram, "surface_texture"), 0);
 		//glUniform1i(glGetUniformLocation(shaderProgram, "palette_texture"), 1);
