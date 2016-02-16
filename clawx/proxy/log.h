@@ -3,6 +3,7 @@
 #include "proxy.h"
 
 #include "json.hpp"
+#include "stb_image_write.h"
 
 #include <string>
 
@@ -24,6 +25,12 @@ inline std::string tag(std::string tagName, nlohmann::json attrs, std::string in
 	return html;
 }
 
+inline std::string to_string(void *ptr) {
+	std::stringstream ss;
+	ss << ptr;
+	return ss.str();
+}
+
 inline std::string img(std::string cssClass, std::string src) {
 	return tag("img", {
 		{ "class", cssClass },
@@ -31,22 +38,35 @@ inline std::string img(std::string cssClass, std::string src) {
 	});
 }
 
+inline std::string img_dump(int w, int h, const byte *data) {
+	static int i = 0;
+	std::string filename = "img/" + std::to_string(i++) + ".png";
+	stbi_write_png(filename.c_str(), w, h, 1, data, w);
+	return img("dump", filename);
+}
+
+inline std::string json_dump(nlohmann::json j) {
+	return tag("data", { {"class", "json"} }, j.dump(2));
+}
+
+inline std::string ptr(void *ptr) {
+	return tag("span", { { "class", "ptr" } }, to_string(ptr));
+}
+
 inline void log(std::string s) {
 	GetProxy()->Log(s);
 }
 
-inline std::string to_string(void *ptr) {
-	std::stringstream ss;
-	ss << ptr;
-	return ss.str();
-}
-
-inline void log_call(std::string module, std::string fn, void *ptr) {
+inline void log_call(std::string module, std::string fn, void *p) {
 	using nlohmann::json;
 
-	log(tag("div", json({
-		{"class", "call"}
-	}), tag("strong", {}, module) +
-	tag("strong", {}, fn) +
-	tag("span", { { "class", "ptr" } }, to_string(ptr))) + '\n');
+	log(
+		tag("div", json({
+			{"class", "call"}
+		}),
+			tag("strong", {}, module) +
+			tag("strong", {}, fn) +
+			ptr(p) + '\n'
+		)
+	);
 }

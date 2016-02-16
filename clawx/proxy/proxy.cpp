@@ -8,6 +8,8 @@
 #include "dump.h"
 
 #include "json.hpp"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
 #include <SFML/Window.hpp>
@@ -57,9 +59,19 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 	const unsigned PALETTE_SIZE = 256;
 
 	std::vector<PALETTEENTRY> entries;
+	std::vector<byte> texture_data;
+
+	GLuint texture;
 
 	DirectDrawPaletteProxy() {
 		entries.resize(PALETTE_SIZE);
+		texture_data.resize(PALETTE_SIZE * 4);
+
+		glGenTextures(1, &texture);
+
+		glBindTexture(GL_TEXTURE_1D, texture);
+		//glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		//glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	}
 
 	/*** IUnknown methods ***/
@@ -100,6 +112,23 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 		DDRAW_PALETTE_PROXY(Initialize);
 		return PROXY_UNIMPLEMENTED();
 	}
+
+	void UpdateTexture() {
+		for (int i = 0; i < PALETTE_SIZE; ++i) {
+			byte *px = &texture_data[i * 4];
+			auto &e = entries[i];
+			px[0] = e.peRed;
+			px[1] = e.peGreen;
+			px[2] = e.peBlue;
+			px[3] = 0xFF;
+		}
+
+		texture_data[0] = texture_data[1] = texture_data[2] = texture_data[3] = 0;
+
+		glBindTexture(GL_TEXTURE_1D, texture);
+		glTexImage1D(texture, 0, GL_RGBA, PALETTE_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data.data());
+	}
+
 	STDMETHOD(SetEntries)(
 		DWORD          dwFlags,
 		DWORD          dwStartingEntry,
@@ -114,24 +143,11 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 			entries[i] = lpEntries[i];
 		}
 
-		std::vector<byte> texture_data(PALETTE_SIZE * 4);
-
-		for (int i = 0; i < PALETTE_SIZE; ++i) {
-			auto &e = entries[i];
-			byte *px = &texture_data[i * 4];
-			px[0] = e.peRed;
-			px[1] = e.peGreen;
-			px[2] = e.peBlue;
-			px[3] = 0xFF;
-		}
+		//UpdateTexture();
 
 		return S_OK;
 	}
 };
-
-#define DDRAW_SURFACE_PROXY(method) log_call("DirectDrawSurfaceProxy", #method, this);
-
-#define _DDSCL_NORMAL 0
 
 int fileExists(TCHAR * file)
 {
@@ -158,6 +174,25 @@ class DirectDrawSurfaceProxy;
 
 DirectDrawSurfaceProxy *front_buffer;
 DirectDrawSurfaceProxy *back_buffer;
+
+inline int pow2roundup(int x)
+{
+	if (x < 0)
+		return 0;
+	--x;
+	x |= x >> 1;
+	x |= x >> 2;
+	x |= x >> 4;
+	x |= x >> 8;
+	x |= x >> 16;
+	return x + 1;
+}
+
+void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp);
+
+#define DDRAW_SURFACE_PROXY(method) log_surface_call(#method, this);
+
+#define _DDSCL_NORMAL 0
 
 std::vector<char> buffer(1920 * 1080 * 4);
 
@@ -194,7 +229,9 @@ public:
 		this->d_h = d_h;
 		this->width = width;
 		this->height = height;
-		this->pitch = pitch;
+		//this->pitch = pitch;
+
+		this->pitch = pow2roundup(width);
 
 		indexed_buffer.resize(640 * 480 * 4); // ...
 
@@ -277,7 +314,11 @@ public:
 		return PROXY_UNIMPLEMENTED();
 	}
 
-	void Draw(int x, int y) {
+	void Dump() {
+		log(img_dump(pitch, height, indexed_buffer.data()));
+	}
+
+	void Draw(int x, int y, GLuint palette_texture) {
 		glm::mat4 pos;
 		pos = glm::translate(pos, { x + 0.5, y + 0.5, 0 });
 		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "pos"), 1, GL_FALSE, glm::value_ptr(pos));
@@ -288,9 +329,31 @@ public:
 
 		glBindVertexArray(vao);
 
+		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, texture);
 
+		//glActiveTexture(GL_TEXTURE1);
+		//glBindTexture(GL_TEXTURE_1D, palette_texture);
+
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+	}
+
+	HRESULT BltGeneric(int x, int y, LPDIRECTDRAWSURFACE3 dds) {
+		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy *)dds;
+
+		log(json_dump({
+			{ "x", x },{ "y", y }
+		}));
+
+		ddsp->Dump();
+
+		if (kind == NORMAL_SURFACE) {
+			return S_OK;
+		}
+
+		ddsp->Draw(x, y, 0);
+
+		return S_OK;
 	}
 
 	STDMETHOD(Blt)(
@@ -303,10 +366,6 @@ public:
 		DDRAW_SURFACE_PROXY(Blt);
 
 		if (!lpDDSrcSurface) {
-			return S_OK;
-		}
-
-		if (kind == NORMAL_SURFACE) {
 			return S_OK;
 		}
 
@@ -323,11 +382,7 @@ public:
 			//y -= lpSrcRect->top;
 		}
 
-		DirectDrawSurfaceProxy *ddsd = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
-
-		//dump("_blt");
-
-		return S_OK;
+		return BltGeneric(x, y, lpDDSrcSurface);
 	}
 
 	STDMETHOD(BltBatch)(THIS_ LPDDBLTBATCH, DWORD, DWORD) {
@@ -344,10 +399,6 @@ public:
 	) {
 		DDRAW_SURFACE_PROXY(BltFast);
 
-		if (kind == NORMAL_SURFACE) {
-			return S_OK;
-		}
-
 		int x = dwX;
 		int y = dwY;
 
@@ -356,11 +407,7 @@ public:
 			//y -= lpSrcRect->top;
 		}
 
-		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
-
-		ddsp->Draw(x, y);
-
-		return S_OK;
+		return BltGeneric(x, y, lpDDSrcSurface);
 	}
 
 	STDMETHOD(DeleteAttachedSurface)(THIS_ DWORD, LPDIRECTDRAWSURFACE3) {
@@ -448,7 +495,9 @@ public:
 		a->dwWidth = width;
 		a->dwHeight = height;
 
-		pitch = a->lPitch;
+		//pitch = a->lPitch;
+
+		a->lPitch = pitch;
 
 		if (pitch < width) {
 			pitch = 640;
@@ -461,7 +510,7 @@ public:
 		return PROXY_UNIMPLEMENTED();
 	}
 	STDMETHOD(IsLost)(THIS) {
-		DDRAW_SURFACE_PROXY(IsLost);
+		//DDRAW_SURFACE_PROXY(IsLost);
 		return 0;
 	}
 	STDMETHOD(Lock)(THIS_ LPRECT a, LPDDSURFACEDESC b, DWORD c, HANDLE d) {
@@ -470,6 +519,7 @@ public:
 		Load("Lock_" + std::to_string(d_h), b);
 		b->dwWidth = width;
 		b->dwHeight = height;
+		b->lPitch = pitch;
 
 		b->lpSurface = indexed_buffer.data();
 
@@ -548,6 +598,8 @@ public:
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, pitch, height, 0, GL_RED, GL_UNSIGNED_BYTE, indexed_buffer.data());
 
 		//dump("_unlock");
+
+		Dump();
 			
 		return S_OK;
 	}
@@ -583,6 +635,21 @@ public:
 	}
 };
 
+void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp) {
+	log_call("DirectDrawSurfaceProxy", method, ddsp);
+
+	std::string t = "surface";
+
+	if (ddsp->kind == DirectDrawSurfaceProxy::FRONT_BUFFER) {
+		t = "frontbuffer";
+	}
+	else if (ddsp->kind == DirectDrawSurfaceProxy::BACK_BUFFER) {
+		t = "backbuffer";
+	}
+
+	log(tag("span", { { "class", t } }, t) + '\n');
+}
+
 #define DDRAW_PROXY(method) log_call("DirectDrawProxy", #method, this);
 
 struct DirectDrawProxy : public IDirectDraw2
@@ -615,8 +682,10 @@ struct DirectDrawProxy : public IDirectDraw2
 			"out vec4 outColor;"
 			"uniform mat2 surface_m;"
 			"uniform sampler2D surface_texture;"
+			//"uniform sampler1D palette_texture;"
 			"void main()"
 			"{"
+			//"    outColor = palette_texture(0.5 + texture(surface_texture, surface_m * Texcoord).r);"
 			"    outColor = texture(surface_texture, surface_m * Texcoord);"
 			"}";
 
@@ -653,6 +722,7 @@ struct DirectDrawProxy : public IDirectDraw2
 		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(trans));
 
 		glUniform1i(glGetUniformLocation(shaderProgram, "surface_texture"), 0);
+		//glUniform1i(glGetUniformLocation(shaderProgram, "palette_texture"), 1);
 	}
 
 	/*** IUnknown methods ***/
@@ -709,6 +779,8 @@ struct DirectDrawProxy : public IDirectDraw2
 		if (kind == DirectDrawSurfaceProxy::FRONT_BUFFER) {
 			front_buffer = ddsp;
 		}
+
+		log(ptr(ddsp));
 
 		*out_dds = (IDirectDrawSurface*)ddsp;
 
@@ -805,6 +877,12 @@ struct DirectDrawProxy : public IDirectDraw2
 	};
 };
 
+const char *html_head = R"HTML(
+<head>
+<link rel="stylesheet" type="text/css" href="style.css">
+</head>
+)HTML";
+
 class Proxy : public IProxy {
 	json _config;
 	std::ofstream _log;
@@ -816,6 +894,8 @@ public:
 
 		std::string log_filename = _config["log_filename"];
 		_log.open(log_filename.c_str());
+
+		_log << html_head;
 
 		window = new sf::Window;
 	}
