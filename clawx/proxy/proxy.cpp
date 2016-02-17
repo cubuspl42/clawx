@@ -235,11 +235,11 @@ public:
 		this->d_h = d_h;
 		this->width = width;
 		this->height = height;
-		//this->pitch = pitch;
+		pitch = pow2roundup(width);
+		pitch = width;
+		this->pitch = pitch;
 
-		this->pitch = pow2roundup(width);
-
-		indexed_buffer.resize(640 * 480 * 4); // ...
+		indexed_buffer.resize(pitch * height); // ...
 
 											  // Create Vertex Array Object
 		glGenVertexArrays(1, &vao);
@@ -262,7 +262,7 @@ public:
 		glGenBuffers(1, &vbo);
 
 		int L = 0;
-		float R = float(width) / pitch;
+		float R = float(width) / this->pitch;
 		int T = 0;
 		int B = 1;
 
@@ -277,18 +277,25 @@ public:
 		glBindBuffer(GL_ARRAY_BUFFER, vbo);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
+		assert(!glGetError());
+
 		GLuint program = (kind == FRONT_BUFFER) ? shaderProgram2 : shaderProgram;
 
 		// Specify the layout of the vertex data
 		GLint posAttrib = glGetAttribLocation(program, "position");
-		glEnableVertexAttribArray(posAttrib);
-		glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), 0);
+		if (posAttrib >= 0) {
+			glEnableVertexAttribArray(posAttrib);
+			glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), 0);
+		}
+		assert(!glGetError());
 
 		GLint texAttrib = glGetAttribLocation(program, "texcoord");
-		glEnableVertexAttribArray(texAttrib);
-		glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
-
-
+		if (texAttrib >= 0) {
+			glEnableVertexAttribArray(texAttrib);
+			glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
+		}
+		
+		assert(!glGetError());
 		// Load textures
 		glGenTextures(1, &texture);
 
@@ -352,28 +359,30 @@ public:
 		assert(!glGetError());
 
 		glm::mat4 pos;
-		pos = glm::translate(pos, { x + 0.5, y + 0.5, 0 });
-		glUniformMatrix4fv(glGetUniformLocation(program, "pos"), 1, GL_FALSE, glm::value_ptr(pos));
+		pos = glm::translate(pos, { x, y, 0 });
+
+		auto uniPos = glGetUniformLocation(program, "pos");
+		if(uniPos >= 0)
+			glUniform2f(uniPos, x, y);
 
 		assert(!glGetError());
 
 		glm::mat4 trans;
-
-		float sx = 1 / 640.f;
-		float sy = 1 / 480.f;
-
-		trans = glm::scale(trans, { sx, sy, 1 });
 
 		if (frameBuffer == 0) {
 			trans = glm::scale(trans, { 1, -1, 1 });
 		}
 
 		trans = glm::translate(trans, { -1, -1, 0 });
-		
 
+		float sx = 2 / 640.f;
+		float sy = 2 / 480.f;
+
+		trans = glm::scale(trans, { sx, sy, 1 });
 
 		GLint uniTrans = glGetUniformLocation(program, "trans");
-		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(trans));
+		if(uniTrans >= 0)
+			glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(trans));
 
 		assert(!glGetError());
 
@@ -388,7 +397,7 @@ public:
 			glActiveTexture(GL_TEXTURE1);
 			glBindTexture(GL_TEXTURE_1D, palette_texture);
 		}
-	
+		
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 		assert(!glGetError());
@@ -397,12 +406,14 @@ public:
 	HRESULT BltGeneric(int x, int y, LPDIRECTDRAWSURFACE3 dds) {
 		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy *)dds;
 
-		log(json_dump({
-			{ "x", x },{ "y", y }
-		}));
+		bool disable_log = config["disable_log"];
 
-		//ddsp->Dump();
-		this->Dump();
+		if (!disable_log) {
+			log(json_dump({
+				{ "x", x },{ "y", y },{ "w", ddsp->width },{ "h", ddsp->height }
+			}));
+		}
+
 
 		if (kind == NORMAL_SURFACE) {
 			return S_OK; // ???
@@ -411,6 +422,17 @@ public:
 		GenFramebuffer();
 
 		ddsp->Draw(frameBuffer, x, y, 0);
+
+		bool blt_dump_ddsp = config["blt_dump_ddsp"];
+		bool blt_dump_this = config["blt_dump_this"];
+
+		if (blt_dump_ddsp)
+			ddsp->Dump();
+
+		if (blt_dump_this) {
+			Stall();
+			this->Dump();
+		}
 
 		return S_OK;
 	}
@@ -569,14 +591,7 @@ public:
 
 		a->dwWidth = width;
 		a->dwHeight = height;
-
-		//pitch = a->lPitch;
-
 		a->lPitch = pitch;
-
-		if (pitch < width) {
-			pitch = 640;
-		}
 
 		return S_OK;
 	}
@@ -588,13 +603,18 @@ public:
 		//DDRAW_SURFACE_PROXY(IsLost);
 		return 0;
 	}
-	STDMETHOD(Lock)(THIS_ LPRECT a, LPDDSURFACEDESC b, DWORD c, HANDLE d) {
-		DDRAW_SURFACE_PROXY(Lock);
 
+	void Stall() {
 		if (frameBuffer) {
 			glBindTexture(GL_TEXTURE_2D, texture);
 			glGetTexImage(GL_TEXTURE_2D, 0, GL_RED, GL_UNSIGNED_BYTE, indexed_buffer.data());
 		}
+	}
+
+	STDMETHOD(Lock)(THIS_ LPRECT a, LPDDSURFACEDESC b, DWORD c, HANDLE d) {
+		DDRAW_SURFACE_PROXY(Lock);
+
+		Stall();
 
 		Load("Lock_" + std::to_string(d_h), b);
 		b->dwWidth = width;
@@ -686,9 +706,9 @@ public:
 			assert(ddpp && ddpp->texture);
 			Draw(0, 0, 0, ddpp->texture);
 		}
-		//dump("_unlock");
 
-		//Dump();
+		if (config["unlock_dump_this"])
+			this->Dump();
 			
 		return S_OK;
 	}
@@ -725,6 +745,12 @@ public:
 };
 
 void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp) {
+	bool disable_log = config["disable_log"];
+
+	if (disable_log) {
+		return;
+	}
+
 	log_call("DirectDrawSurfaceProxy", method, ddsp);
 
 	std::string t = "surface";
@@ -737,6 +763,57 @@ void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp) {
 	}
 
 	log(tag("span", { { "class", t } }, t) + '\n');
+}
+
+std::string read_file(std::string filename) {
+	std::ifstream f(filename.c_str());
+	std::stringstream ss;
+	ss << f.rdbuf();
+	return ss.str();
+}
+
+GLuint create_shader(GLenum shader_type, std::string shader_name) {
+	// Shader sources
+	std::string source = read_file(shader_name);
+	auto sourcePtr = source.c_str();
+
+	// Create and compile the vertex shader
+	GLuint shader = glCreateShader(shader_type);
+	glShaderSource(shader, 1, &sourcePtr, NULL);
+	glCompileShader(shader);
+
+	char shader_log[1024];
+	glGetShaderInfoLog(shader, 1024, NULL, shader_log);
+
+	if (shader_log[0]) {
+		MessageBox(0, shader_log, shader_name.c_str(), 0);
+	}
+
+	assert(!glGetError());
+
+	return shader;
+}
+
+GLuint create_program(GLuint vertex_shader, GLuint fragment_shader) {
+	GLuint shaderProgram = glCreateProgram();
+	glAttachShader(shaderProgram, vertex_shader);
+	glAttachShader(shaderProgram, fragment_shader);
+
+	glBindFragDataLocation(shaderProgram, 0, "outColor");
+
+	glLinkProgram(shaderProgram);
+	glUseProgram(shaderProgram);
+
+	char shaderProgramLog[1024];
+	glGetProgramInfoLog(shaderProgram, 1024, NULL, shaderProgramLog);
+
+	if (shaderProgramLog[0]) {
+		MessageBox(0, shaderProgramLog, "shader program", 0);
+	}
+
+	assert(!glGetError());
+
+	return shaderProgram;
 }
 
 #define DDRAW_PROXY(method) log_call("DirectDrawProxy", #method, this);
@@ -753,103 +830,46 @@ struct DirectDrawProxy : public IDirectDraw2
 
 	DirectDrawProxy() {
 		// Shader sources
-		const GLchar* vertexSource =
-			"#version 150 core\n"
-			"in vec2 position;"
-			"in vec2 texcoord;"
-			"out vec2 Texcoord;"
-			"uniform mat4 trans;"
-			"uniform mat4 pos;"
-			"void main()"
-			"{"
-			"    Texcoord = texcoord;"
-			"    gl_Position = trans * pos * vec4(position, 0.0, 1.0);"
-			"}";
-		const GLchar* fragmentSource =
-			"#version 150 core\n"
-			"in vec2 Texcoord;"
-			"out vec4 outColor;"
-			"uniform sampler2D surface_texture;"
-			"void main()"
-			"{"
-			"    outColor = texture(surface_texture, Texcoord);"
-			"}";
-		// Shader sources
+		std::string vertexSource = read_file("vertexShader.vert");
+		std::string fragmentSource = read_file("fragmentShader.frag");
+		std::string fragmentSource2 = read_file("fragmentShader2.frag");
 
-		const GLchar* fragmentSource2 =
-			"#version 150 core\n"
-			"in vec2 Texcoord;"
-			"out vec4 outColor;"
-			"uniform sampler2D surface_texture;"
-			"uniform sampler1D palette_texture;"
-			"void main()"
-			"{"
-			"    outColor = texture(palette_texture, texture(surface_texture, Texcoord).r);"
-			"}";
+		auto vertexSourcePtr = vertexSource.c_str();
+		auto fragmentSourcePtr = fragmentSource.c_str();
+		auto fragmentSource2Ptr = fragmentSource2.c_str();
 
 		// Initialize GLEW
 		glewExperimental = GL_TRUE;
 		glewInit();
 
-		assert(!glGetError());
+		glViewport(0, 0, 640, 480);
 
-		// Create and compile the vertex shader
-		GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-		glShaderSource(vertexShader, 1, &vertexSource, NULL);
-		glCompileShader(vertexShader);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 		assert(!glGetError());
 
-		char vertexShaderLog[1024];
-		glGetShaderInfoLog(vertexShader, 1024, NULL, vertexShaderLog);
-
-		// Create and compile the fragment shader
-		GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-		glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
-		glCompileShader(fragmentShader);
-
-		assert(!glGetError());
-
-		char fragmentShaderLog[1024];
-		glGetShaderInfoLog(fragmentShader, 1024, NULL, fragmentShaderLog);
-
-		// Create and compile the fragment shader
-		GLuint fragmentShader2 = glCreateShader(GL_FRAGMENT_SHADER);
-		glShaderSource(fragmentShader2, 1, &fragmentSource2, NULL);
-		glCompileShader(fragmentShader2);
-
-		assert(!glGetError());
-
-		char fragmentShader2Log[1024];
-		glGetShaderInfoLog(fragmentShader2, 1024, NULL, fragmentShader2Log);
+		GLuint vertexShader = create_shader(GL_VERTEX_SHADER, "vertexShader.vert");
+		GLuint fragmentShader = create_shader(GL_FRAGMENT_SHADER, "fragmentShader.frag");
+		GLuint fragmentShader2 = create_shader(GL_FRAGMENT_SHADER, "fragmentShader2.frag");
 
 		// Link the vertex and fragment shader into a shader program
-		shaderProgram = glCreateProgram();
-		glAttachShader(shaderProgram, vertexShader);
-		glAttachShader(shaderProgram, fragmentShader);
-		glBindFragDataLocation(shaderProgram, 0, "outColor");
-		glLinkProgram(shaderProgram);
-		glUseProgram(shaderProgram);
+		shaderProgram = create_program(vertexShader, fragmentShader);
 
 		assert(!glGetError());
 
 		char shaderProgramLog[1024];
 		glGetProgramInfoLog(shaderProgram, 1024, NULL, shaderProgramLog);
 
-
 		assert(!glGetError());
 
 		auto u = glGetUniformLocation(shaderProgram, "surface_texture");
-		glUniform1i(u, 0);
+		if(u >= 0)
+			glUniform1i(u, 0);
 
 		assert(!glGetError());
 
-		shaderProgram2 = glCreateProgram();
-		glAttachShader(shaderProgram2, vertexShader);
-		glAttachShader(shaderProgram2, fragmentShader2);
-		glBindFragDataLocation(shaderProgram2, 0, "outColor");
-		glLinkProgram(shaderProgram2);
-		glUseProgram(shaderProgram2);
+		shaderProgram2 = create_program(vertexShader, fragmentShader2);
 
 		assert(!glGetError());
 
@@ -857,12 +877,14 @@ struct DirectDrawProxy : public IDirectDraw2
 		glGetProgramInfoLog(shaderProgram2, 1024, NULL, shaderProgram2Log);
 
 		u = glGetUniformLocation(shaderProgram2, "surface_texture");
-		glUniform1i(u, 0);
+		if (u >= 0)
+			glUniform1i(u, 0);
 
 		assert(!glGetError());
 
 		u = glGetUniformLocation(shaderProgram2, "palette_texture");
-		glUniform1i(u, 1);
+		if (u >= 0)
+			glUniform1i(u, 1);
 
 		assert(!glGetError());
 	}
@@ -976,6 +998,8 @@ struct DirectDrawProxy : public IDirectDraw2
 		DDRAW_PROXY(GetDisplayMode);
 
 		Load("EnumDisplayModes_0", a);
+
+		a->lPitch = 1024;
 
 		return S_OK;
 	}
@@ -1091,6 +1115,7 @@ public:
 		window->create(hWnd);
 
 		bool vsync = config["vsync"];
+
 		window->setVerticalSyncEnabled(vsync);
 
 		return hWnd;
@@ -1120,6 +1145,12 @@ public:
 	}
 
 	void Log(std::string s) {
+		bool disable_log = _config["disable_log"];
+
+		if (disable_log) {
+			return;
+		}
+
 		_log << s;
 		_log.flush();
 	}
