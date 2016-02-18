@@ -34,6 +34,8 @@ bool DISABLE_PROXY = false;
 
 sf::Window *window;
 
+Renderer *r = nullptr;
+
 template<typename T>
 size_t h(const T* ptr) {
 	const char *c = (const char *)ptr;
@@ -173,9 +175,6 @@ void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp);
 
 #define DDRAW_SURFACE_PROXY(method) log_surface_call(#method, this);
 
-GLuint shaderProgram;
-GLuint shaderProgram2;
-
 class DirectDrawSurfaceProxy : public IDirectDrawSurface3
 {
 public:
@@ -254,7 +253,7 @@ public:
 
 		assert(!glGetError());
 
-		GLuint program = (kind == FRONT_BUFFER) ? shaderProgram2 : shaderProgram;
+		GLuint program = (kind == FRONT_BUFFER) ? r->frontbuffer_program : r->surface_program;
 
 		// Specify the layout of the vertex data
 		GLint posAttrib = glGetAttribLocation(program, "position");
@@ -326,7 +325,7 @@ public:
 	}
 
 	void Draw(GLuint frameBuffer, int x, int y, GLuint palette_texture) {
-		GLuint program = palette_texture ? shaderProgram2 : shaderProgram;
+		GLuint program = palette_texture ? r->frontbuffer_program : r->surface_program;
 
 		glUseProgram(program);
 		glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
@@ -747,49 +746,7 @@ std::string read_file(std::string filename) {
 	return ss.str();
 }
 
-GLuint create_shader(GLenum shader_type, std::string shader_name) {
-	// Shader sources
-	std::string source = read_file(shader_name);
-	auto sourcePtr = source.c_str();
 
-	// Create and compile the vertex shader
-	GLuint shader = glCreateShader(shader_type);
-	glShaderSource(shader, 1, &sourcePtr, NULL);
-	glCompileShader(shader);
-
-	char shader_log[1024];
-	glGetShaderInfoLog(shader, 1024, NULL, shader_log);
-
-	if (shader_log[0]) {
-		MessageBox(0, shader_log, shader_name.c_str(), 0);
-	}
-
-	assert(!glGetError());
-
-	return shader;
-}
-
-GLuint create_program(GLuint vertex_shader, GLuint fragment_shader) {
-	GLuint shaderProgram = glCreateProgram();
-	glAttachShader(shaderProgram, vertex_shader);
-	glAttachShader(shaderProgram, fragment_shader);
-
-	glBindFragDataLocation(shaderProgram, 0, "outColor");
-
-	glLinkProgram(shaderProgram);
-	glUseProgram(shaderProgram);
-
-	char shaderProgramLog[1024];
-	glGetProgramInfoLog(shaderProgram, 1024, NULL, shaderProgramLog);
-
-	if (shaderProgramLog[0]) {
-		MessageBox(0, shaderProgramLog, "shader program", 0);
-	}
-
-	assert(!glGetError());
-
-	return shaderProgram;
-}
 
 #define DDRAW_PROXY(method) log_call("DirectDrawProxy", #method, this);
 
@@ -805,61 +762,11 @@ struct DirectDrawProxy : public IDirectDraw2
 		return back_buffer;
 	}
 
-	void InitGl() {
-		glewExperimental = GL_TRUE;
-		glewInit();
 
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-		glViewport(0, 0, 640, 480);
-	}
-
-	void LoadSurfaceProgram() {
-		GLuint vertexShader = create_shader(GL_VERTEX_SHADER, "vertexShader.vert");
-		GLuint fragmentShader = create_shader(GL_FRAGMENT_SHADER, "fragmentShader.frag");
-
-		shaderProgram = create_program(vertexShader, fragmentShader);
-
-		assert(!glGetError());
-
-		GLint u = glGetUniformLocation(shaderProgram, "surface_texture");
-		if (u >= 0)
-			glUniform1i(u, 0);
-
-		assert(!glGetError());
-	}
-
-	void LoadFrontbufferProgram() {
-		assert(!glGetError());
-
-		GLuint vertexShader = create_shader(GL_VERTEX_SHADER, "vertexShader.vert");
-		GLuint fragmentShader2 = create_shader(GL_FRAGMENT_SHADER, "fragmentShader2.frag");
-
-		shaderProgram2 = create_program(vertexShader, fragmentShader2);
-
-		assert(!glGetError());
-
-		GLint u;
-
-		u = glGetUniformLocation(shaderProgram2, "surface_texture");
-		if (u >= 0)
-			glUniform1i(u, 0);
-
-		assert(!glGetError());
-
-		u = glGetUniformLocation(shaderProgram2, "palette_texture");
-		if (u >= 0)
-			glUniform1i(u, 1);
-
-		assert(!glGetError());
-	}
-
-	DirectDrawProxy() {
-		InitGl();
-
-		LoadSurfaceProgram();
-		LoadFrontbufferProgram();
+	DirectDrawProxy(HWND hwnd)
+		: renderer(hwnd)
+	{
+		r = &renderer;
 	}
 
 	/*** IUnknown methods ***/
@@ -1054,6 +961,8 @@ class Proxy : public IProxy {
 	json _config;
 	std::ofstream _log;
 
+	DirectDrawProxy *ddp = nullptr;
+
 public:
 
 	Proxy() {
@@ -1112,6 +1021,8 @@ public:
 
 		window->setVerticalSyncEnabled(vsync);
 
+		ddp = new DirectDrawProxy(hWnd);
+
 		return hWnd;
 	}
 
@@ -1121,7 +1032,7 @@ public:
 		LPDIRECTDRAW *lplpDD,
 		IUnknown     *pUnkOuter
 	) {
-		auto ddp = new DirectDrawProxy();
+		assert(ddp);
 
 		*lplpDD = (IDirectDraw *)ddp;
 
