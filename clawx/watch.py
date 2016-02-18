@@ -4,9 +4,9 @@ from shutil import copy
 from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
 
-src = r"D:\data\code\github\clawx\clawx\Debug"
-src_release = r"D:\data\code\github\clawx\clawx\Release"
-dest = r"D:\My Games\Clawx"
+src = "./Debug"
+src_release = "./Release"
+dest = "./Claw"
 
 class MyHandler(PatternMatchingEventHandler):
     patterns=["*.DLL", "*.PRX"]

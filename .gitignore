@@ -4,7 +4,18 @@
 *.filters
 *.user
 *.dll
+*.prx
 *.vspx
+*.png
+*.rez
+*.exe
+*.bmp
+*.7z
+*.html
+*.css
+*.txt
+*.ini
+*.usr
 .vs/
 doc/
 Debug/
@@ -14,3 +25,5 @@ SFML*/
 glfw*/
 glew*/
 glm/
+clawx/Claw/Custom/
+clawx/Claw/Sounds/
