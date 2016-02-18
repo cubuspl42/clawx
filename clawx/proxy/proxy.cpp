@@ -1,8 +1,5 @@
 #define DLL_NAME "PROXY"
 
-// Include GLEW
-#include <GL/glew.h>
-
 #include "log.h"
 #include "proxy.h"
 #include "dump.h"
@@ -15,11 +12,6 @@
 #include "stb_image_write.h"
 
 #include <SFML/Window.hpp>
-#include <SFML/OpenGL.hpp>
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
 
 #include <fstream>
 #include <unordered_map>
@@ -354,8 +346,6 @@ public:
 
 		window->display();
 
-		glClear(GL_COLOR_BUFFER_BIT);
-
 		return S_OK;
 	}
 	STDMETHOD(GetAttachedSurface)(THIS_ LPDDSCAPS a, LPDIRECTDRAWSURFACE3 FAR *out_dds) {
@@ -441,8 +431,6 @@ public:
 
 		b->lpSurface = surface.texture_buffer.data();
 
-		assert(!glGetError());
-
 		return S_OK;
 	}
 
@@ -483,9 +471,6 @@ public:
 		DDRAW_SURFACE_PROXY(Unlock);
 
 		r->UploadSurfaceBuffer(&surface);
-
-		assert(!glGetError());
-
 
 		if (kind == FRONT_BUFFER) {
 			assert(ddpp && ddpp->renderer->palette_texture);
