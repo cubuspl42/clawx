@@ -171,14 +171,18 @@
       </PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="proxy.cpp" />
+    <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="shader.cpp" />
+    <ClCompile Include="Surface.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dump.h" />
     <ClInclude Include="log.h" />
     <ClInclude Include="proxy.h" />
     <ClInclude Include="proxydb.h" />
+    <ClInclude Include="Renderer.h" />
     <ClInclude Include="shader.hpp" />
+    <ClInclude Include="Surface.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

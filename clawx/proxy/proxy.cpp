@@ -7,6 +7,8 @@
 #include "proxy.h"
 #include "dump.h"
 
+#include "Renderer.h"
+
 #include "json.hpp"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -56,24 +58,17 @@ size_t h_ddsd00(DDSURFACEDESC *ddsd) {
 
 struct DirectDrawPaletteProxy : public IDirectDrawPalette
 {
-	static const unsigned PALETTE_SIZE = 256;
+	static const unsigned PALETTE_SIZE = Renderer::PALETTE_SIZE;
+
+	Renderer *renderer = nullptr;
 
 	std::vector<PALETTEENTRY> entries;
-	std::vector<byte> texture_buffer;
 
-	GLuint texture;
+	DirectDrawPaletteProxy(Renderer *renderer) {
+		
+		this->renderer = renderer;
 
-	DirectDrawPaletteProxy() {
 		entries.resize(PALETTE_SIZE);
-		texture_buffer.resize(PALETTE_SIZE * 4);
-
-		glGenTextures(1, &texture);
-
-		glBindTexture(GL_TEXTURE_1D, texture);
-		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-		assert(!glGetError());
 	}
 
 	/*** IUnknown methods ***/
@@ -115,24 +110,6 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 		return PROXY_UNIMPLEMENTED();
 	}
 
-	void UpdateTexture() {
-		for (int i = 0; i < PALETTE_SIZE; ++i) {
-			byte *px = &texture_buffer[i * 4];
-			auto &e = entries[i];
-			px[0] = e.peRed;
-			px[1] = e.peGreen;
-			px[2] = e.peBlue;
-			px[3] = 0xFF;
-		}
-
-		texture_buffer[0] = texture_buffer[1] = texture_buffer[2] = texture_buffer[3] = 0;
-
-		glBindTexture(GL_TEXTURE_1D, texture);
-		glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, PALETTE_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_buffer.data());
-
-		assert(!glGetError());
-	}
-
 	STDMETHOD(SetEntries)(
 		DWORD          dwFlags,
 		DWORD          dwStartingEntry,
@@ -147,7 +124,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 			entries[i] = lpEntries[i];
 		}
 
-		UpdateTexture();
+		renderer->SetPalette(lpEntries);
 
 		return S_OK;
 	}
@@ -230,17 +207,16 @@ public:
 		this->ddp = ddp;
 		this->d_h = d_h;
 
-
 		this->kind = kind;
 		this->width = width;
 		this->height = height;
+
 		pitch = pow2roundup(width);
 		pitch = width;
 		this->pitch = pitch;
 
-		indexed_buffer.resize(pitch * height); // ...
+		indexed_buffer.resize(pitch * height);
 
-											  // Create Vertex Array Object
 		glGenVertexArrays(1, &vao);
 		glBindVertexArray(vao);
 
@@ -524,7 +500,7 @@ public:
 		back_buffer->Clear();
 
 		if(ddpp)
-			Draw(0, 0, 0, ddpp->texture);
+			Draw(0, 0, 0, ddpp->renderer->palette_texture);
 
 		window->display();
 
@@ -702,8 +678,8 @@ public:
 
 
 		if (kind == FRONT_BUFFER) {
-			assert(ddpp && ddpp->texture);
-			Draw(0, 0, 0, ddpp->texture);
+			assert(ddpp && ddpp->renderer->palette_texture);
+			Draw(0, 0, 0, ddpp->renderer->palette_texture);
 		}
 
 		if (config["unlock_dump_this"])
@@ -819,6 +795,8 @@ GLuint create_program(GLuint vertex_shader, GLuint fragment_shader) {
 
 struct DirectDrawProxy : public IDirectDraw2
 {
+	Renderer renderer;
+
 	DirectDrawSurfaceProxy *GetFrontBuffer() {
 		return front_buffer;
 	}
@@ -922,7 +900,7 @@ struct DirectDrawProxy : public IDirectDraw2
 	) {
 		DDRAW_PROXY(CreatePalette);
 
-		auto ddpp = new DirectDrawPaletteProxy();
+		auto ddpp = new DirectDrawPaletteProxy(&renderer);
 		*lplpDDPalette = ddpp;
 
 		ddpp->SetEntries(dwFlags, 0, DirectDrawPaletteProxy::PALETTE_SIZE, lpDDColorArray);
