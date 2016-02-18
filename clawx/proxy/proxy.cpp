@@ -192,15 +192,10 @@ public:
 	Kind kind;
 	int width = 0;
 	int height = 0;
-	int pitch = 0;
-
-	std::vector<UCHAR> indexed_buffer;
 
 	DirectDrawPaletteProxy *ddpp = nullptr;
 
-	GLuint vao;
-	GLuint texture;
-	GLuint frameBuffer = 0;
+	Renderer::Surface surface;
 
 	DirectDrawSurfaceProxy(DirectDrawProxy *ddp, Kind kind, size_t d_h, int width, int height) {
 		this->ddp = ddp;
@@ -210,88 +205,7 @@ public:
 		this->width = width;
 		this->height = height;
 
-		pitch = pow2roundup(width);
-		pitch = width;
-		this->pitch = pitch;
-
-		indexed_buffer.resize(pitch * height);
-
-		glGenVertexArrays(1, &vao);
-		glBindVertexArray(vao);
-
-		// Create an element array
-		GLuint ebo;
-		glGenBuffers(1, &ebo);
-
-		GLuint elements[] = {
-			0, 1, 2,
-			2, 3, 0
-		};
-
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elements), elements, GL_STATIC_DRAW);
-
-		// Create a Vertex Buffer Object and copy the vertex data to it
-		GLuint vbo;
-		glGenBuffers(1, &vbo);
-
-		int L = 0;
-		float R = float(width) / this->pitch;
-		int T = 0;
-		int B = 1;
-
-		GLfloat vertices[] = {
-			//  Position      Texcoords
-			0,		0,		L, T, // Top-left
-			width,	0,		R, T, // Top-right
-			width,	height, R, B, // Bottom-right
-			0,		height, L, B  // Bottom-left
-		};
-
-		glBindBuffer(GL_ARRAY_BUFFER, vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-		assert(!glGetError());
-
-		GLuint program = (kind == FRONT_BUFFER) ? r->frontbuffer_program : r->surface_program;
-
-		// Specify the layout of the vertex data
-		GLint posAttrib = glGetAttribLocation(program, "position");
-		if (posAttrib >= 0) {
-			glEnableVertexAttribArray(posAttrib);
-			glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), 0);
-		}
-		assert(!glGetError());
-
-		GLint texAttrib = glGetAttribLocation(program, "texcoord");
-		if (texAttrib >= 0) {
-			glEnableVertexAttribArray(texAttrib);
-			glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
-		}
-		
-		assert(!glGetError());
-		// Load textures
-		glGenTextures(1, &texture);
-
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, texture);
-		
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, pitch, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
-
-		assert(!glGetError());
-	}
-
-	void GenFramebuffer() {
-		if (frameBuffer == 0) {
-			glGenFramebuffers(1, &frameBuffer);
-			glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
-			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
-		}
+		this->surface = r->CreateSurface(width, height, kind == FRONT_BUFFER);
 	}
 
 	/*** IUnknown methods ***/
@@ -321,60 +235,8 @@ public:
 	}
 
 	void Dump() {
-		log(img_dump(pitch, height, indexed_buffer.data()));
-	}
-
-	void Draw(GLuint frameBuffer, int x, int y, GLuint palette_texture) {
-		GLuint program = palette_texture ? r->frontbuffer_program : r->surface_program;
-
-		glUseProgram(program);
-		glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
-
-		assert(!glGetError());
-
-		glm::mat4 pos;
-		pos = glm::translate(pos, { x, y, 0 });
-
-		auto uniPos = glGetUniformLocation(program, "pos");
-		if(uniPos >= 0)
-			glUniform2f(uniPos, x, y);
-
-		assert(!glGetError());
-
-		glm::mat4 trans;
-
-		if (frameBuffer == 0) {
-			trans = glm::scale(trans, { 1, -1, 1 });
-		}
-
-		trans = glm::translate(trans, { -1, -1, 0 });
-
-		float sx = 2 / 640.f;
-		float sy = 2 / 480.f;
-
-		trans = glm::scale(trans, { sx, sy, 1 });
-
-		GLint uniTrans = glGetUniformLocation(program, "trans");
-		if(uniTrans >= 0)
-			glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(trans));
-
-		assert(!glGetError());
-
-		glBindVertexArray(vao);
-
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, texture);
-
-		assert(!glGetError());
-
-		if (palette_texture) {
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_1D, palette_texture);
-		}
-		
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-		assert(!glGetError());
+		r->DownloadSurfaceBuffer(&surface);
+		log(img_dump(width, height, surface.texture_buffer.data()));
 	}
 
 	HRESULT BltGeneric(int x, int y, LPDIRECTDRAWSURFACE3 dds) {
@@ -389,13 +251,7 @@ public:
 		}
 
 
-		if (kind == NORMAL_SURFACE) {
-			return S_OK; // ???
-		}
-
-		GenFramebuffer();
-
-		ddsp->Draw(frameBuffer, x, y, 0);
+		r->Render(x, y, &surface, &ddsp->surface);
 
 		bool blt_dump_ddsp = config["blt_dump_ddsp"];
 		bool blt_dump_this = config["blt_dump_this"];
@@ -404,7 +260,6 @@ public:
 			ddsp->Dump();
 
 		if (blt_dump_this) {
-			Stall();
 			this->Dump();
 		}
 
@@ -477,11 +332,6 @@ public:
 		DDRAW_SURFACE_PROXY(EnumOverlayZOrders);
 		return PROXY_UNIMPLEMENTED();
 	}
-	
-	void Clear() {
-		glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
-		glClear(GL_COLOR_BUFFER_BIT);
-	}
 
 	STDMETHOD(Flip)(THIS_ LPDIRECTDRAWSURFACE3 a, DWORD b) {
 		DDRAW_SURFACE_PROXY(Flip);
@@ -493,13 +343,14 @@ public:
 		if (i % 5 == 0)
 			GetProxy()->ReloadConfig();
 
-		GenFramebuffer();
+		r->Render(0, 0, &surface, &back_buffer->surface);
 
-		back_buffer->Draw(frameBuffer, 0, 0, 0);
-		back_buffer->Clear();
-
-		if(ddpp)
-			Draw(0, 0, 0, ddpp->renderer->palette_texture);
+		if (ddpp) {
+			//Draw(0, 0, 0, ddpp->renderer->palette_texture);
+			//r->Render(0, 0, )
+			r->RenderToScreen(&surface);
+		}
+			
 
 		window->display();
 
@@ -565,7 +416,7 @@ public:
 
 		a->dwWidth = width;
 		a->dwHeight = height;
-		a->lPitch = pitch;
+		a->lPitch = width;
 
 		return S_OK;
 	}
@@ -578,51 +429,48 @@ public:
 		return 0;
 	}
 
-	void Stall() {
-		if (frameBuffer) {
-			glBindTexture(GL_TEXTURE_2D, texture);
-			glGetTexImage(GL_TEXTURE_2D, 0, GL_RED, GL_UNSIGNED_BYTE, indexed_buffer.data());
-		}
-	}
-
 	STDMETHOD(Lock)(THIS_ LPRECT a, LPDDSURFACEDESC b, DWORD c, HANDLE d) {
 		DDRAW_SURFACE_PROXY(Lock);
 
-		Stall();
+		r->DownloadSurfaceBuffer(&surface);
 
 		Load("Lock_" + std::to_string(d_h), b);
 		b->dwWidth = width;
 		b->dwHeight = height;
-		b->lPitch = pitch;
+		b->lPitch = width;
 
-		b->lpSurface = indexed_buffer.data();
-
-		//dump("_lock");
+		b->lpSurface = surface.texture_buffer.data();
 
 		assert(!glGetError());
 
 		return S_OK;
 	}
+
 	STDMETHOD(ReleaseDC)(THIS_ HDC a) {
 		DDRAW_SURFACE_PROXY(ReleaseDC);
 		return S_OK;
 	}
+
 	STDMETHOD(Restore)(THIS) {
 		DDRAW_SURFACE_PROXY(Restore);
 		return S_OK;
 	}
+
 	STDMETHOD(SetClipper)(THIS_ LPDIRECTDRAWCLIPPER) {
 		DDRAW_SURFACE_PROXY(SetClipper);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(SetColorKey)(THIS_ DWORD a, LPDDCOLORKEY b) {
 		DDRAW_SURFACE_PROXY(SetColorKey);
 		return S_OK;
 	}
+
 	STDMETHOD(SetOverlayPosition)(THIS_ LONG, LONG) {
 		DDRAW_SURFACE_PROXY(SetOverlayPosition);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(SetPalette)(THIS_ LPDIRECTDRAWPALETTE a) {
 		DDRAW_SURFACE_PROXY(SetPalette);
 		
@@ -631,54 +479,17 @@ public:
 		return S_OK;
 	}
 
-	void dump(std::string p) {
-#if 0
-		if (indexed_buffer.size() && fileExists("dump")) {
-			static int i = 0;
-			int p = width;
-			if (pitch > 0 && pitch < 1024) p = pitch;
-
-			auto rgbab = indexed2rgba((UCHAR*)indexed_buffer.data(), width, height, p);
-
-			char t[64];
-
-			const char *tp = "sf";
-			if (kind == FRONT_BUFFER) tp = "fb";
-			if (kind == BACK_BUFFER) tp = "bb";
-
-			sprintf_s(t, "d/%05d_%p_%s_%s.png", i++, this, tp, unlock ? "unlock": "lock");
-
-			stbi_write_bmp(t, width, height, 4, rgbab.data());
-		}
-#else
-		if (fileExists("dump")) {
-			static int i = 0;
-
-			char t[64];
-
-			const char *tp = "sf";
-			if (kind == FRONT_BUFFER) tp = "fb";
-			if (kind == BACK_BUFFER) tp = "bb";
-
-			sprintf_s(t, "d/%05d_%p_%s_%s.bmp", i++, this, tp, p.c_str());
-
-			//stbi_write_bmp(t, width, height, 4, pixels);
-		}
-#endif
-	}
-
 	STDMETHOD(Unlock)(THIS_ LPVOID a) {
 		DDRAW_SURFACE_PROXY(Unlock);
 
-		glBindTexture(GL_TEXTURE_2D, texture);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, pitch, height, 0, GL_RED, GL_UNSIGNED_BYTE, indexed_buffer.data());
+		r->UploadSurfaceBuffer(&surface);
 
 		assert(!glGetError());
 
 
 		if (kind == FRONT_BUFFER) {
 			assert(ddpp && ddpp->renderer->palette_texture);
-			Draw(0, 0, 0, ddpp->renderer->palette_texture);
+			//Draw(0, 0, 0, ddpp->renderer->palette_texture);
 		}
 
 		if (config["unlock_dump_this"])
@@ -691,26 +502,32 @@ public:
 		DDRAW_SURFACE_PROXY(UpdateOverlay);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(UpdateOverlayDisplay)(THIS_ DWORD) {
 		DDRAW_SURFACE_PROXY(UpdateOverlayDisplay);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(UpdateOverlayZOrder)(THIS_ DWORD, LPDIRECTDRAWSURFACE3) {
 		DDRAW_SURFACE_PROXY(UpdateOverlayZOrder);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(GetDDInterface)(THIS_ LPVOID FAR *) {
 		DDRAW_SURFACE_PROXY(GetDDInterface);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(PageLock)(THIS_ DWORD) {
 		DDRAW_SURFACE_PROXY(PageLock);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(PageUnlock)(THIS_ DWORD) {
 		DDRAW_SURFACE_PROXY(PageUnlock);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	/*** Added in the V3 interface ***/
 	STDMETHOD(SetSurfaceDesc)(THIS_ LPDDSURFACEDESC a, DWORD b) {
 		DDRAW_SURFACE_PROXY(SetSurfaceDesc);
@@ -746,8 +563,6 @@ std::string read_file(std::string filename) {
 	return ss.str();
 }
 
-
-
 #define DDRAW_PROXY(method) log_call("DirectDrawProxy", #method, this);
 
 struct DirectDrawProxy : public IDirectDraw2
@@ -761,7 +576,6 @@ struct DirectDrawProxy : public IDirectDraw2
 	DirectDrawSurfaceProxy *GetBackBuffer() {
 		return back_buffer;
 	}
-
 
 	DirectDrawProxy(HWND hwnd)
 		: renderer(hwnd)
