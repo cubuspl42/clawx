@@ -56,7 +56,7 @@ size_t h_ddsd00(DDSURFACEDESC *ddsd) {
 
 struct DirectDrawPaletteProxy : public IDirectDrawPalette
 {
-	const unsigned PALETTE_SIZE = 256;
+	static const unsigned PALETTE_SIZE = 256;
 
 	std::vector<PALETTEENTRY> entries;
 	std::vector<byte> texture_data;
@@ -828,53 +828,42 @@ struct DirectDrawProxy : public IDirectDraw2
 		return back_buffer;
 	}
 
-	DirectDrawProxy() {
-		// Shader sources
-		std::string vertexSource = read_file("vertexShader.vert");
-		std::string fragmentSource = read_file("fragmentShader.frag");
-		std::string fragmentSource2 = read_file("fragmentShader2.frag");
-
-		auto vertexSourcePtr = vertexSource.c_str();
-		auto fragmentSourcePtr = fragmentSource.c_str();
-		auto fragmentSource2Ptr = fragmentSource2.c_str();
-
-		// Initialize GLEW
+	void InitGl() {
 		glewExperimental = GL_TRUE;
 		glewInit();
-
-		glViewport(0, 0, 640, 480);
 
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-		assert(!glGetError());
+		glViewport(0, 0, 640, 480);
+	}
 
+	void LoadSurfaceProgram() {
 		GLuint vertexShader = create_shader(GL_VERTEX_SHADER, "vertexShader.vert");
 		GLuint fragmentShader = create_shader(GL_FRAGMENT_SHADER, "fragmentShader.frag");
-		GLuint fragmentShader2 = create_shader(GL_FRAGMENT_SHADER, "fragmentShader2.frag");
 
-		// Link the vertex and fragment shader into a shader program
 		shaderProgram = create_program(vertexShader, fragmentShader);
 
 		assert(!glGetError());
 
-		char shaderProgramLog[1024];
-		glGetProgramInfoLog(shaderProgram, 1024, NULL, shaderProgramLog);
-
-		assert(!glGetError());
-
-		auto u = glGetUniformLocation(shaderProgram, "surface_texture");
-		if(u >= 0)
+		GLint u = glGetUniformLocation(shaderProgram, "surface_texture");
+		if (u >= 0)
 			glUniform1i(u, 0);
 
 		assert(!glGetError());
+	}
+
+	void LoadFrontbufferProgram() {
+		assert(!glGetError());
+
+		GLuint vertexShader = create_shader(GL_VERTEX_SHADER, "vertexShader.vert");
+		GLuint fragmentShader2 = create_shader(GL_FRAGMENT_SHADER, "fragmentShader2.frag");
 
 		shaderProgram2 = create_program(vertexShader, fragmentShader2);
 
 		assert(!glGetError());
 
-		char shaderProgram2Log[1024];
-		glGetProgramInfoLog(shaderProgram2, 1024, NULL, shaderProgram2Log);
+		GLint u;
 
 		u = glGetUniformLocation(shaderProgram2, "surface_texture");
 		if (u >= 0)
@@ -889,6 +878,13 @@ struct DirectDrawProxy : public IDirectDraw2
 		assert(!glGetError());
 	}
 
+	DirectDrawProxy() {
+		InitGl();
+
+		LoadSurfaceProgram();
+		LoadFrontbufferProgram();
+	}
+
 	/*** IUnknown methods ***/
 	STDMETHOD(QueryInterface) (THIS_ REFIID riid, LPVOID FAR * ppvObj) {
 		DDRAW_PROXY(QueryInterface);
@@ -897,23 +893,28 @@ struct DirectDrawProxy : public IDirectDraw2
 
 		return S_OK;
 	}
+
 	STDMETHOD_(ULONG, AddRef) (THIS) {
 		DDRAW_PROXY(AddRef);
 		return S_OK;
 	}
+
 	STDMETHOD_(ULONG, Release) (THIS) {
 		DDRAW_PROXY(Release);
 		return S_OK;
 	}
+
 	/*** IDirectDraw methods ***/
 	STDMETHOD(Compact)(THIS) {
 		DDRAW_PROXY(Compact);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(CreateClipper)(THIS_ DWORD a, LPDIRECTDRAWCLIPPER FAR* b, IUnknown FAR *c) {
 		DDRAW_PROXY(CreateClipper);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(CreatePalette)(
 			DWORD                   dwFlags,
 			LPPALETTEENTRY          lpDDColorArray,
@@ -925,10 +926,11 @@ struct DirectDrawProxy : public IDirectDraw2
 		auto ddpp = new DirectDrawPaletteProxy();
 		*lplpDDPalette = ddpp;
 
-		ddpp->SetEntries(dwFlags, 0, 256, lpDDColorArray);
+		ddpp->SetEntries(dwFlags, 0, DirectDrawPaletteProxy::PALETTE_SIZE, lpDDColorArray);
 		
 		return S_OK;
 	}
+
 	STDMETHOD(CreateSurface)(THIS_  LPDDSURFACEDESC ddsd, LPDIRECTDRAWSURFACE FAR *out_dds, IUnknown FAR *c) {
 		DDRAW_PROXY(CreateSurface);
 
@@ -957,6 +959,7 @@ struct DirectDrawProxy : public IDirectDraw2
 
 		return S_OK;
 	}
+
 	STDMETHOD(DuplicateSurface)(THIS_ LPDIRECTDRAWSURFACE a, LPDIRECTDRAWSURFACE FAR *b) {
 		DDRAW_PROXY(DuplicateSurface);
 		return PROXY_UNIMPLEMENTED();
@@ -978,14 +981,17 @@ struct DirectDrawProxy : public IDirectDraw2
 
 		return S_OK;
 	}
+
 	STDMETHOD(EnumSurfaces)(THIS_ DWORD, LPDDSURFACEDESC, LPVOID, LPDDENUMSURFACESCALLBACK) {
 		DDRAW_PROXY(EnumSurfaces);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(FlipToGDISurface)(THIS) {
 		DDRAW_PROXY(FlipToGDISurface);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(GetCaps)(THIS_ LPDDCAPS a, LPDDCAPS b) {
 		DDRAW_PROXY(GetCaps);
 
@@ -994,6 +1000,7 @@ struct DirectDrawProxy : public IDirectDraw2
 
 		return S_OK;
 	}
+
 	STDMETHOD(GetDisplayMode)(THIS_ LPDDSURFACEDESC a) {
 		DDRAW_PROXY(GetDisplayMode);
 
@@ -1003,6 +1010,7 @@ struct DirectDrawProxy : public IDirectDraw2
 
 		return S_OK;
 	}
+
 	STDMETHOD(GetFourCCCodes)(THIS_  LPDWORD, LPDWORD) {
 		DDRAW_PROXY(GetFourCCCodes);
 		return PROXY_UNIMPLEMENTED();
@@ -1011,38 +1019,47 @@ struct DirectDrawProxy : public IDirectDraw2
 		DDRAW_PROXY(GetGDISurface);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(GetMonitorFrequency)(THIS_ LPDWORD) {
 		DDRAW_PROXY(GetMonitorFrequency);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(GetScanLine)(THIS_ LPDWORD) {
 		DDRAW_PROXY(GetScanLine);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(GetVerticalBlankStatus)(THIS_ LPBOOL) {
 		DDRAW_PROXY(GetVerticalBlankStatus);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(Initialize)(THIS_ GUID FAR *) {
 		DDRAW_PROXY(Initialize);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(RestoreDisplayMode)(THIS) {
 		DDRAW_PROXY(RestoreDisplayMode);
 		return S_OK;
 	}
+
 	STDMETHOD(SetCooperativeLevel)(THIS_ HWND hWnd, DWORD flags) {
 		DDRAW_PROXY(SetCooperativeLevel);
 		return S_OK;
 	}
+
 	STDMETHOD(SetDisplayMode)(THIS_ DWORD w, DWORD h, DWORD c, DWORD d, DWORD e) {
 		DDRAW_PROXY(SetDisplayMode);
 		return S_OK;
 	}
+
 	STDMETHOD(WaitForVerticalBlank)(THIS_ DWORD a, HANDLE b) {
 		DDRAW_PROXY(WaitForVerticalBlank);
 		return S_OK;
 	}
+
 	/*** Added in the v2 interface ***/
 	STDMETHOD(GetAvailableVidMem)(THIS_ LPDDSCAPS, LPDWORD, LPDWORD) {
 		DDRAW_PROXY(GetAvailableVidMem);

@@ -11,9 +11,9 @@
 
   "disable_proxy": true,
 
-  "CreateWindowExA_nWidth": 1920,
-  "CreateWindowExA_nHeight": 1080,
-  "CreateWindowExA_disable_style": false,
+  "CreateWindowExA_nWidth": 640,
+  "CreateWindowExA_nHeight": 480,
+  "CreateWindowExA_disable_style": true,
 
   "SetDisplayMode_w": 1920,
   "SetDisplayMode_h": 1080,
