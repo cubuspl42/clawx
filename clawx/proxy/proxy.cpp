@@ -46,9 +46,9 @@ size_t h_ddsd00(DDSURFACEDESC *ddsd) {
 	return h(&ddsd00);
 }
 
-#define PROXY_UNIMPLEMENTED() 0
+#define PROXY_UNIMPLEMENTED() (log_call("UNIMPLEMENTED", "!", this), 0)
 
-#define DDRAW_PALETTE_PROXY(method)
+#define DDRAW_PALETTE_PROXY(method) log_call("DirectDrawpaletteProxy", #method, this)
 
 struct DirectDrawPaletteProxy : public IDirectDrawPalette
 {
@@ -203,24 +203,33 @@ public:
 	/*** IUnknown methods ***/
 	STDMETHOD(QueryInterface) (THIS_ REFIID riid, LPVOID FAR * ppvObj) {
 		DDRAW_SURFACE_PROXY(QueryInterface);
-
 		*ppvObj = this;
-
+		AddRef();
 		return S_OK;
 	}
+
 	STDMETHOD_(ULONG, AddRef) (THIS) {
 		DDRAW_SURFACE_PROXY(AddRef);
-		return S_OK;
+		return this->IUnknown::AddRef();
 	}
+
 	STDMETHOD_(ULONG, Release) (THIS) {
 		DDRAW_SURFACE_PROXY(Release);
+		ULONG count = this->IUnknown::Release();
+
+		if (count == 0) {
+			delete this;
+		}
+
 		return S_OK;
 	}
+
 	/*** IDirectDrawSurface methods ***/
 	STDMETHOD(AddAttachedSurface)(THIS_ LPDIRECTDRAWSURFACE3) {
 		DDRAW_SURFACE_PROXY(AddAttachedSurface);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(AddOverlayDirtyRect)(THIS_ LPRECT) {
 		DDRAW_SURFACE_PROXY(AddOverlayDirtyRect);
 		return PROXY_UNIMPLEMENTED();
@@ -688,8 +697,6 @@ struct DirectDrawProxy : public IDirectDraw2
 		DDRAW_PROXY(GetDisplayMode);
 
 		Load("EnumDisplayModes_0", a);
-
-		// a->lPitch = 1024;
 
 		return S_OK;
 	}

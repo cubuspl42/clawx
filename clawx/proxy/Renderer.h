@@ -61,16 +61,18 @@ public:
 	}
 
 	void DownloadSurfaceBuffer(Surface *surface) {
-		//if (surface->fbo) {
-			glBindTexture(GL_TEXTURE_2D, surface->texture);
-			glGetTexImage(GL_TEXTURE_2D, 0, GL_RED, GL_UNSIGNED_BYTE, surface->texture_buffer.data());
-		//}
+		glBindTexture(GL_TEXTURE_2D, surface->texture);
+		glGetTexImage(
+			GL_TEXTURE_2D,
+			0,
+			GL_RED,
+			GL_UNSIGNED_BYTE,
+			surface->texture_buffer.data());
 	}
 
 	void UploadSurfaceBuffer(Surface *surface) {
 		glBindTexture(GL_TEXTURE_2D, surface->texture);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, surface->width, surface->height, 0, GL_RED, GL_UNSIGNED_BYTE, surface->texture_buffer.data());
-
 	}
 
 	void SetPalette(LPPALETTEENTRY lpEntries);

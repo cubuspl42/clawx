@@ -5,7 +5,7 @@
   "log_filename": "log.html",
   "log_prolog_filename": "log_prolog.html",
 
-  "disable_log": true,
+  "disable_log": false,
 
   "show_messagebox": false,
 
