@@ -59,13 +59,13 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 	static const unsigned PALETTE_SIZE = 256;
 
 	std::vector<PALETTEENTRY> entries;
-	std::vector<byte> texture_data;
+	std::vector<byte> texture_buffer;
 
 	GLuint texture;
 
 	DirectDrawPaletteProxy() {
 		entries.resize(PALETTE_SIZE);
-		texture_data.resize(PALETTE_SIZE * 4);
+		texture_buffer.resize(PALETTE_SIZE * 4);
 
 		glGenTextures(1, &texture);
 
@@ -117,7 +117,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 
 	void UpdateTexture() {
 		for (int i = 0; i < PALETTE_SIZE; ++i) {
-			byte *px = &texture_data[i * 4];
+			byte *px = &texture_buffer[i * 4];
 			auto &e = entries[i];
 			px[0] = e.peRed;
 			px[1] = e.peGreen;
@@ -125,10 +125,10 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 			px[3] = 0xFF;
 		}
 
-		texture_data[0] = texture_data[1] = texture_data[2] = texture_data[3] = 0;
+		texture_buffer[0] = texture_buffer[1] = texture_buffer[2] = texture_buffer[3] = 0;
 
 		glBindTexture(GL_TEXTURE_1D, texture);
-		glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, PALETTE_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data.data());
+		glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, PALETTE_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_buffer.data());
 
 		assert(!glGetError());
 	}
@@ -196,10 +196,6 @@ void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp);
 
 #define DDRAW_SURFACE_PROXY(method) log_surface_call(#method, this);
 
-#define _DDSCL_NORMAL 0
-
-std::vector<char> buffer(1920 * 1080 * 4);
-
 GLuint shaderProgram;
 GLuint shaderProgram2;
 
@@ -215,8 +211,9 @@ public:
 	int magic = MAGIC;
 
 	DirectDrawProxy *ddp = nullptr;
-	Kind kind;
 	size_t d_h = 0;
+
+	Kind kind;
 	int width = 0;
 	int height = 0;
 	int pitch = 0;
@@ -229,10 +226,12 @@ public:
 	GLuint texture;
 	GLuint frameBuffer = 0;
 
-	DirectDrawSurfaceProxy(DirectDrawProxy *ddp, Kind kind, size_t d_h, int width, int height, int pitch) {
+	DirectDrawSurfaceProxy(DirectDrawProxy *ddp, Kind kind, size_t d_h, int width, int height) {
 		this->ddp = ddp;
-		this->kind = kind;
 		this->d_h = d_h;
+
+
+		this->kind = kind;
 		this->width = width;
 		this->height = height;
 		pitch = pow2roundup(width);
@@ -536,7 +535,7 @@ public:
 	STDMETHOD(GetAttachedSurface)(THIS_ LPDDSCAPS a, LPDIRECTDRAWSURFACE3 FAR *out_dds) {
 		DDRAW_SURFACE_PROXY(GetAttachedSurface);
 
-		auto ddsp = new DirectDrawSurfaceProxy(ddp, BACK_BUFFER, d_h, width, height, width);
+		auto ddsp = new DirectDrawSurfaceProxy(ddp, BACK_BUFFER, d_h, width, height);
 		*out_dds = ddsp;
 
 		back_buffer = ddsp;
@@ -947,7 +946,7 @@ struct DirectDrawProxy : public IDirectDraw2
 
 		size_t d_h = kind == DirectDrawSurfaceProxy::FRONT_BUFFER ? h(ddsd) : ddsd00_h(ddsd);
 
-		DirectDrawSurfaceProxy *ddsp = new DirectDrawSurfaceProxy(this, kind, d_h, width, height, width);
+		DirectDrawSurfaceProxy *ddsp = new DirectDrawSurfaceProxy(this, kind, d_h, width, height);
 
 		if (kind == DirectDrawSurfaceProxy::FRONT_BUFFER) {
 			front_buffer = ddsp;
@@ -1006,7 +1005,7 @@ struct DirectDrawProxy : public IDirectDraw2
 
 		Load("EnumDisplayModes_0", a);
 
-		a->lPitch = 1024;
+		// a->lPitch = 1024;
 
 		return S_OK;
 	}
