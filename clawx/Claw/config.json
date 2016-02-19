@@ -5,7 +5,7 @@
   "log_filename": "log.html",
   "log_prolog_filename": "log_prolog.html",
 
-  "disable_log": false,
+  "disable_log": true,
 
   "show_messagebox": false,
 
@@ -45,10 +45,10 @@
 
   "blt_dump_ddsp": false,
   "blt_dump_this": false,
-  "unlock_dump_this": true,
-  "flip_dump": true,
+  "unlock_dump_this": false,
+  "flip_dump": false,
 
-  "flip_sleep": 300,
+  "flip_sleep": 1,
 
   "sx": 0.003125,
   "sy": 0.004167

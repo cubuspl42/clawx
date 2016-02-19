@@ -50,6 +50,14 @@ size_t h_ddsd00(DDSURFACEDESC *ddsd) {
 
 #define DDRAW_PALETTE_PROXY(method) log_call("DirectDrawpaletteProxy", #method, this)
 
+class DirectDrawProxy;
+class DirectDrawSurfaceProxy;
+
+DirectDrawSurfaceProxy *front_buffer;
+DirectDrawSurfaceProxy *back_buffer;
+
+void render_to_screen(DirectDrawSurfaceProxy *ddsp);
+
 struct DirectDrawPaletteProxy : public IDirectDrawPalette
 {
 	static const unsigned PALETTE_SIZE = Renderer::PALETTE_SIZE;
@@ -125,6 +133,8 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 
 		renderer->SetPalette(lpEntries);
 
+		render_to_screen(front_buffer);
+
 		return S_OK;
 	}
 };
@@ -148,12 +158,6 @@ size_t ddsd00_h(LPDDSURFACEDESC ddsd) {
 	ddsd00.lpSurface = nullptr;
 	return h(&ddsd00);
 }
-
-class DirectDrawProxy;
-class DirectDrawSurfaceProxy;
-
-DirectDrawSurfaceProxy *front_buffer;
-DirectDrawSurfaceProxy *back_buffer;
 
 inline int pow2roundup(int x)
 {
@@ -259,7 +263,6 @@ public:
 			}));
 		}
 
-
 		r->Render(x, y, &surface, &ddsp->surface);
 
 		bool blt_dump_ddsp = config["blt_dump_ddsp"];
@@ -283,10 +286,6 @@ public:
 		 LPDDBLTFX            lpDDBltFx
 	) {
 		DDRAW_SURFACE_PROXY(Blt);
-
-		if (!lpDDSrcSurface) {
-			return S_OK;
-		}
 
 		int x = 0;
 		int y = 0;
@@ -342,6 +341,10 @@ public:
 		return PROXY_UNIMPLEMENTED();
 	}
 
+	void RenderToScreen() {
+		r->RenderToScreen(&surface);
+	}
+
 	STDMETHOD(Flip)(THIS_ LPDIRECTDRAWSURFACE3 a, DWORD b) {
 		DDRAW_SURFACE_PROXY(Flip);
 
@@ -353,13 +356,16 @@ public:
 			GetProxy()->ReloadConfig();
 
 		r->Render(0, 0, &surface, &back_buffer->surface);
-		r->RenderToScreen(&surface);
+
+		RenderToScreen();
 
 		if (config["flip_dump"])
 			Dump();
 			
 		window->setVerticalSyncEnabled(true);
 		window->display();
+
+		glClear(GL_COLOR_BUFFER_BIT);
 
 		int flip_sleep = config["flip_sleep"];
 		Sleep(flip_sleep);
@@ -542,6 +548,11 @@ public:
 		return PROXY_UNIMPLEMENTED();
 	}
 };
+
+void render_to_screen(DirectDrawSurfaceProxy *ddsp) {
+	ddsp->RenderToScreen();
+	window->display();
+}
 
 void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp) {
 	bool disable_log = config["disable_log"];

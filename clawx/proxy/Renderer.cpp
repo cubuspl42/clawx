@@ -151,10 +151,12 @@ void Renderer::SetPalette(LPPALETTEENTRY lpEntries)
 		px[3] = 0xFF;
 	}
 
+#if 0
 	palette_texture_buffer[0] = 0;
 	palette_texture_buffer[1] = 0;
 	palette_texture_buffer[2] = 0;
 	palette_texture_buffer[3] = 0;
+#endif
 
 	glBindTexture(GL_TEXTURE_1D, palette_texture);
 	glTexImage1D(
