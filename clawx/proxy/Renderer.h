@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Surface.h"
-
 #include <GL/glew.h>
 
 #include <glm/glm.hpp>
@@ -39,9 +37,21 @@ public:
 		GLuint fbo = 0;
 
 		GLuint vao;
+		GLuint vbo;
+		GLuint ebo;
 		GLuint texture;
 
 		std::vector<byte> texture_buffer;
+
+		Surface() = default;
+		
+		Surface(Surface &&);
+
+		Surface &operator=(Surface &&);
+
+		Surface(int width, int height, GLuint program);
+
+		~Surface();
 	};
 
 	static const unsigned PALETTE_SIZE = 256;
@@ -118,6 +128,8 @@ public:
 		assert(!glGetError());
 
 		glBindVertexArray(surface.vao);
+
+		assert(!glGetError());
 
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, surface.texture);

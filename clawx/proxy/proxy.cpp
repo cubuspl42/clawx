@@ -70,19 +70,23 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 		DDRAW_PALETTE_PROXY(QueryInterface);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD_(ULONG, AddRef) (THIS) {
 		DDRAW_PALETTE_PROXY(AddRef);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD_(ULONG, Release) (THIS) {
 		DDRAW_PALETTE_PROXY(Release);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	/*** IDirectDrawPalette methods ***/
 	STDMETHOD(GetCaps)(THIS_ LPDWORD) {
 		DDRAW_PALETTE_PROXY(GetCaps);
 		return PROXY_UNIMPLEMENTED();
 	}
+
 	STDMETHOD(GetEntries)(
 		DWORD          dwFlags,
 		DWORD          dwBase,
@@ -99,6 +103,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 
 		return S_OK;
 	}
+
 	STDMETHOD(Initialize)(THIS_ LPDIRECTDRAW, DWORD, LPPALETTEENTRY) {
 		DDRAW_PALETTE_PROXY(Initialize);
 		return PROXY_UNIMPLEMENTED();
@@ -165,7 +170,7 @@ inline int pow2roundup(int x)
 
 void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp);
 
-#define DDRAW_SURFACE_PROXY(method) log_surface_call(#method, this);
+#define DDRAW_SURFACE_PROXY(method) log_surface_call(#method, this)
 
 class DirectDrawSurfaceProxy : public IDirectDrawSurface3
 {
@@ -177,6 +182,8 @@ public:
 	};
 
 	int magic = MAGIC;
+
+	ULONG ref_count = 0;
 
 	DirectDrawProxy *ddp = nullptr;
 	size_t d_h = 0;
@@ -198,6 +205,8 @@ public:
 		this->height = height;
 
 		this->surface = r->CreateSurface(width, height, kind == FRONT_BUFFER);
+	
+		AddRef();
 	}
 
 	/*** IUnknown methods ***/
@@ -210,14 +219,13 @@ public:
 
 	STDMETHOD_(ULONG, AddRef) (THIS) {
 		DDRAW_SURFACE_PROXY(AddRef);
-		return this->IUnknown::AddRef();
+		return ++ref_count;
 	}
 
 	STDMETHOD_(ULONG, Release) (THIS) {
 		DDRAW_SURFACE_PROXY(Release);
-		ULONG count = this->IUnknown::Release();
 
-		if (count == 0) {
+		if (--ref_count == 0) {
 			delete this;
 		}
 
@@ -345,15 +353,18 @@ public:
 			GetProxy()->ReloadConfig();
 
 		r->Render(0, 0, &surface, &back_buffer->surface);
+		r->RenderToScreen(&surface);
 
-		if (ddpp) {
-			//Draw(0, 0, 0, ddpp->renderer->palette_texture);
-			//r->Render(0, 0, )
-			r->RenderToScreen(&surface);
-		}
+		if (config["flip_dump"])
+			Dump();
 			
-
+		window->setVerticalSyncEnabled(true);
 		window->display();
+
+		int flip_sleep = config["flip_sleep"];
+		Sleep(flip_sleep);
+
+		window->setVerticalSyncEnabled(false);
 
 		return S_OK;
 	}
@@ -460,6 +471,9 @@ public:
 
 	STDMETHOD(SetColorKey)(THIS_ DWORD a, LPDDCOLORKEY b) {
 		DDRAW_SURFACE_PROXY(SetColorKey);
+		
+		assert(b->dwColorSpaceHighValue == 0 && b->dwColorSpaceLowValue == 0);
+
 		return S_OK;
 	}
 
@@ -482,8 +496,8 @@ public:
 		r->UploadSurfaceBuffer(&surface);
 
 		if (kind == FRONT_BUFFER) {
-			assert(ddpp && ddpp->renderer->palette_texture);
-			//Draw(0, 0, 0, ddpp->renderer->palette_texture);
+			r->RenderToScreen(&surface);
+			window->display();
 		}
 
 		if (config["unlock_dump_this"])

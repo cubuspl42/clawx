@@ -173,7 +173,6 @@
     <ClCompile Include="proxy.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="shader.cpp" />
-    <ClCompile Include="Surface.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dump.h" />
