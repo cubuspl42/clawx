@@ -3,6 +3,7 @@
 #include "log.h"
 #include "proxy.h"
 #include "dump.h"
+#include "utils.h"
 
 #include "Renderer.h"
 
