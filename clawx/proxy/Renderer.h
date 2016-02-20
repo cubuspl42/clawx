@@ -15,9 +15,14 @@
 
 #include <vector>
 
+const int FRONTBUFFER_WIDTH = 640;
+const int FRONTBUFFER_HEIGHT = 480;
+
 struct Renderer
 {
 	sf::Window window;
+	int window_width = 0;
+	int window_height = 0;
 	Palette *palette = nullptr;
 
 	GLuint surface_program = 0;
@@ -54,7 +59,7 @@ public:
 		~Surface();
 	};
 
-	Renderer(HWND hwnd);
+	Renderer(HWND hwnd, int window_width, int window_height);
 
 	~Renderer();
 
@@ -87,6 +92,8 @@ public:
 
 	void Render(int x, int y, int sx_, int sy_, int color_key, Surface *a, Surface *b) {
 		CreateFramebuffer(a);
+
+		glViewport(0, 0, FRONTBUFFER_WIDTH, FRONTBUFFER_HEIGHT);
 
 		GLuint fbo = a->fbo;
 		GLuint program = surface_program;
@@ -141,6 +148,8 @@ public:
 	void RenderToScreen(Surface *b) {
 		if (!palette)
 			return;
+
+		glViewport(0, 0, window_width, window_height);
 
 		GLuint fbo = 0;
 		GLuint program = frontbuffer_program;

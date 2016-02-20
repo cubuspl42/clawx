@@ -60,8 +60,6 @@ void Renderer::InitGl() {
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	glViewport(0, 0, 640, 480);
 }
 
 void Renderer::LoadSurfaceProgram() {
@@ -104,19 +102,13 @@ void Renderer::LoadFrontbufferProgram() {
 	assert(!glGetError());
 }
 
-
-
-Renderer::Renderer(HWND hwnd)
+Renderer::Renderer(HWND hwnd, int window_width, int window_height)
+	: window_width(window_width), window_height(window_height)
 {
-	//window.create(hwnd);
-
 	InitGl();
 
 	LoadSurfaceProgram();
 	LoadFrontbufferProgram();
-
-
-
 }
 
 Renderer::~Renderer()

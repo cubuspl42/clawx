@@ -636,12 +636,13 @@ struct DirectDrawProxy : public IDirectDraw2
 		return front_buffer;
 	}
 
-	DirectDrawSurfaceProxy *GetBackBuffer() {
+	DirectDrawSurfaceProxy *GetBackBuffer()
+	{
 		return back_buffer;
 	}
 
-	DirectDrawProxy(HWND hwnd)
-		: renderer(hwnd)
+	DirectDrawProxy(HWND hwnd, int window_width, int window_height)
+		: renderer(hwnd, window_width, window_height)
 	{
 		r = &renderer;
 	}
@@ -867,12 +868,15 @@ public:
 		HINSTANCE hInstance,
 		LPVOID    lpParam
 	) {
-		if (config("CreateWindowExA_disable_style")) {
+		if (config("windowed")) {
 			dwStyle = 0;
+			nWidth = config("window_width");
+			nHeight = config("window_height");
 		}
-
-		nWidth = config("CreateWindowExA_nWidth");
-		nHeight = config("CreateWindowExA_nHeight");
+		else {
+			nWidth = config("fullscreen_width");
+			nHeight = config("fullscreen_height");
+		}
 
 		HWND hWnd = _CreateWindowExA(
 			dwExStyle,
@@ -895,7 +899,7 @@ public:
 
 		window->setVerticalSyncEnabled(vsync);
 
-		ddp = new DirectDrawProxy(hWnd);
+		ddp = new DirectDrawProxy(hWnd, nWidth, nHeight);
 
 		return hWnd;
 	}
