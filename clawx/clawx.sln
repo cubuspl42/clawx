@@ -6,12 +6,24 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wrappit", "wrappit\wrappit.vcxproj", "{F1BA6111-48CD-4568-8A4F-0790A44463BA}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "user32", "user32\user32.vcxproj", "{842692BF-C92C-4C09-8B4D-AF1DB7A052AD}"
+	ProjectSection(ProjectDependencies) = postProject
+		{6FFA7FED-7561-4E8A-849C-B16B4D70F50C} = {6FFA7FED-7561-4E8A-849C-B16B4D70F50C}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gdi32", "gdi32\gdi32.vcxproj", "{040A8CA9-4BB4-4333-8F53-8F90A76F386B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{6FFA7FED-7561-4E8A-849C-B16B4D70F50C} = {6FFA7FED-7561-4E8A-849C-B16B4D70F50C}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ddraw", "ddraw\ddraw.vcxproj", "{43DC8E9E-1477-4317-B2C0-30E0AE329CB4}"
+	ProjectSection(ProjectDependencies) = postProject
+		{6FFA7FED-7561-4E8A-849C-B16B4D70F50C} = {6FFA7FED-7561-4E8A-849C-B16B4D70F50C}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "smackw32", "smackw32\smackw32.vcxproj", "{7C192835-6CA4-4C0E-982B-19C0C5F99667}"
+	ProjectSection(ProjectDependencies) = postProject
+		{6FFA7FED-7561-4E8A-849C-B16B4D70F50C} = {6FFA7FED-7561-4E8A-849C-B16B4D70F50C}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "proxy", "proxy\proxy.vcxproj", "{6FFA7FED-7561-4E8A-849C-B16B4D70F50C}"
 EndProject
