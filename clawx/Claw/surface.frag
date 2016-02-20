@@ -3,8 +3,8 @@
 in vec2 Texcoord;
 out vec4 outColor;
 
-uniform int color_key;
 uniform sampler2D surface_texture;
+uniform int color_key;
 
 void main()
 {
@@ -14,5 +14,4 @@ void main()
 	} else {
 		outColor = c;
 	}
-    //outColor = vec4(0.5, 0.5, 0.4, 1.0);
 };

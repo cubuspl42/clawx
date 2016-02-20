@@ -3,6 +3,11 @@
 #include <fstream>
 #include <sstream>
 
+static const std::string SURFACE_VERTEX_SHADER = "surface.vert";
+static const std::string SURFACE_FRAGMENT_SHADER = "surface.frag";
+static const std::string FRONTBUFFER_VERTEX_SHADER = "frontbuffer.vert";
+static const std::string FRONTBUFFER_FRAGMENT_SHADER = "frontbuffer.frag";
+
 static std::string read_file(std::string filename) {
 	std::ifstream f(filename.c_str());
 	std::stringstream ss;
@@ -63,8 +68,8 @@ void Renderer::InitGl() {
 }
 
 void Renderer::LoadSurfaceProgram() {
-	GLuint vertexShader = create_shader(GL_VERTEX_SHADER, "vertexShader.vert");
-	GLuint fragmentShader = create_shader(GL_FRAGMENT_SHADER, "fragmentShader.frag");
+	GLuint vertexShader = create_shader(GL_VERTEX_SHADER, SURFACE_VERTEX_SHADER);
+	GLuint fragmentShader = create_shader(GL_FRAGMENT_SHADER, SURFACE_FRAGMENT_SHADER);
 
 	surface_program = create_program(vertexShader, fragmentShader);
 
@@ -80,10 +85,10 @@ void Renderer::LoadSurfaceProgram() {
 void Renderer::LoadFrontbufferProgram() {
 	assert(!glGetError());
 
-	GLuint vertexShader = create_shader(GL_VERTEX_SHADER, "vertexShader.vert");
-	GLuint fragmentShader2 = create_shader(GL_FRAGMENT_SHADER, "fragmentShader2.frag");
+	GLuint vertexShader = create_shader(GL_VERTEX_SHADER, FRONTBUFFER_VERTEX_SHADER);
+	GLuint fragmentShader = create_shader(GL_FRAGMENT_SHADER, FRONTBUFFER_FRAGMENT_SHADER);
 
-	frontbuffer_program = create_program(vertexShader, fragmentShader2);
+	frontbuffer_program = create_program(vertexShader, fragmentShader);
 
 	assert(!glGetError());
 
