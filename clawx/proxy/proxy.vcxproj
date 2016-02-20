@@ -170,6 +170,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Palette.cpp" />
     <ClCompile Include="proxy.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="shader.cpp" />
@@ -177,6 +178,7 @@
   <ItemGroup>
     <ClInclude Include="dump.h" />
     <ClInclude Include="log.h" />
+    <ClInclude Include="Palette.h" />
     <ClInclude Include="proxy.h" />
     <ClInclude Include="proxydb.h" />
     <ClInclude Include="Renderer.h" />

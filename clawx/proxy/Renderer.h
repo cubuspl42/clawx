@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Palette.h"
+
 #include <GL/glew.h>
 
 #include <glm/glm.hpp>
@@ -16,9 +18,7 @@
 struct Renderer
 {
 	sf::Window window;
-
-	std::vector<byte> palette_texture_buffer;
-	GLuint palette_texture = 0;
+	Palette *palette = nullptr;
 
 	GLuint surface_program = 0;
 	GLuint frontbuffer_program;
@@ -54,8 +54,6 @@ public:
 		~Surface();
 	};
 
-	static const unsigned PALETTE_SIZE = 256;
-
 	Renderer(HWND hwnd);
 
 	~Renderer();
@@ -85,9 +83,9 @@ public:
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, surface->width, surface->height, 0, GL_RED, GL_UNSIGNED_BYTE, surface->texture_buffer.data());
 	}
 
-	void SetPalette(LPPALETTEENTRY lpEntries);
+	void SetPalette(Palette *palette);
 
-	void Render(int x, int y, int sx_, int sy_, Surface *a, Surface *b) {
+	void Render(int x, int y, int sx_, int sy_, int color_key, Surface *a, Surface *b) {
 		CreateFramebuffer(a);
 
 		GLuint fbo = a->fbo;
@@ -120,6 +118,10 @@ public:
 		if (uniTrans >= 0)
 			glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(trans));
 
+		GLint uniCk = glGetUniformLocation(program, "color_key");
+		if (uniCk >= 0)
+			glUniform1i(uniCk, color_key);
+
 		assert(!glGetError());
 
 		glBindVertexArray(surface.vao);
@@ -131,15 +133,15 @@ public:
 
 		assert(!glGetError());
 
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_1D, palette_texture);
-
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 		assert(!glGetError());
 	}
 
 	void RenderToScreen(Surface *b) {
+		if (!palette)
+			return;
+
 		GLuint fbo = 0;
 		GLuint program = frontbuffer_program;
 		auto &surface = *b;
@@ -187,13 +189,13 @@ public:
 		assert(!glGetError());
 
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_1D, palette_texture);
+		glBindTexture(GL_TEXTURE_1D, palette->palette_texture);
 
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 		assert(!glGetError());
 	}
 
-	void Clear(Surface *surface, float r, float g, float b);
+	void Clear(Surface *surface, int color);
 };
 

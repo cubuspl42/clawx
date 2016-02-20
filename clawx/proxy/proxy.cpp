@@ -60,9 +60,11 @@ void render_to_screen(DirectDrawSurfaceProxy *ddsp);
 
 struct DirectDrawPaletteProxy : public IDirectDrawPalette
 {
-	static const unsigned PALETTE_SIZE = Renderer::PALETTE_SIZE;
+	static const unsigned PALETTE_SIZE = Palette::PALETTE_SIZE;
 
 	Renderer *renderer = nullptr;
+
+	Palette palette;
 
 	std::vector<PALETTEENTRY> entries;
 
@@ -131,7 +133,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 			entries[i] = lpEntries[i];
 		}
 
-		renderer->SetPalette(lpEntries);
+		palette.Update(lpEntries);
 
 		render_to_screen(front_buffer);
 
@@ -264,7 +266,7 @@ public:
 		}
 
 		if (ddsp) {
-			r->Render(x, y, 1, 1, &surface, &ddsp->surface);
+			r->Render(x, y, 1, 1, 0, &surface, &ddsp->surface);
 
 			bool blt_dump_ddsp = config["blt_dump_ddsp"];
 			bool blt_dump_this = config["blt_dump_this"];
@@ -328,25 +330,16 @@ public:
 					sy = -1;
 				}
 			}
-			r->Render(x, y, sx, sy, &surface, &ddsp->surface);
+			r->Render(x, y, sx, sy, 0, &surface, &ddsp->surface);
 		}
-		else {
-			r->Clear(&surface, 0, 0, 0);
+		else if (dwFlags & DDBLT_COLORFILL) {
+			if (!lpDestRect || (lpDestRect->left == 0)) {
+				assert(!lpDDSrcSurface);
+				DWORD fillColor = lpDDBltFx->dwFillColor;
+				r->Clear(&surface, fillColor);
+			}
 		}
 
-
-		/*
-		if (dwFlags & DDBLT_COLORFILL) {
-			DWORD fillColor = lpDDBltFx->dwFillColor;
-			float _r = GetRValue(fillColor) / 255.f;
-			float g = GetGValue(fillColor) / 255.f;
-			float b = GetBValue(fillColor) / 255.f;
-			r->Clear(&surface, _r, g, b);
-		}
-		else {
-			r->Render(x, y, &surface, &ddsp->surface);
-		}
-		*/
 		return S_OK;
 	}
 
@@ -381,7 +374,7 @@ public:
 		int x = dwX - lpSrcRect->left;
 		int y = dwY - lpSrcRect->top;
 
-		r->Render(x, y, 1, 1, &surface, &ddsp->surface);
+		r->Render(x, y, 1, 1, 0, &surface, &ddsp->surface);
 
 		return S_OK;
 
@@ -416,7 +409,7 @@ public:
 		if (i % 5 == 0)
 			GetProxy()->ReloadConfig();
 
-		r->Render(0, 0, 1, 1, &surface, &back_buffer->surface);
+		r->Render(0, 0, 1, 1, -1, &surface, &back_buffer->surface);
 
 		RenderToScreen();
 
@@ -553,6 +546,8 @@ public:
 		DDRAW_SURFACE_PROXY(SetPalette);
 		
 		ddpp = (DirectDrawPaletteProxy *)a;
+
+		r->SetPalette(&ddpp->palette);
 
 		return S_OK;
 	}
