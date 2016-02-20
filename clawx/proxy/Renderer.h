@@ -87,7 +87,7 @@ public:
 
 	void SetPalette(LPPALETTEENTRY lpEntries);
 
-	void Render(int x, int y, Surface *a, Surface *b) {
+	void Render(int x, int y, int sx_, int sy_, Surface *a, Surface *b) {
 		CreateFramebuffer(a);
 
 		GLuint fbo = a->fbo;
@@ -96,15 +96,6 @@ public:
 
 		glUseProgram(program);
 		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
-		assert(!glGetError());
-
-		glm::mat4 pos;
-		pos = glm::translate(pos, { x, y, 0 });
-
-		auto uniPos = glGetUniformLocation(program, "pos");
-		if (uniPos >= 0)
-			glUniform2f(uniPos, x, y);
 
 		assert(!glGetError());
 
@@ -121,6 +112,10 @@ public:
 
 		trans = glm::scale(trans, { sx, sy, 1 });
 
+		trans = glm::translate(trans, { x, y, 0 });
+
+		trans = glm::scale(trans, { sx_, sy_, 0 });
+
 		GLint uniTrans = glGetUniformLocation(program, "trans");
 		if (uniTrans >= 0)
 			glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(trans));
@@ -136,8 +131,8 @@ public:
 
 		assert(!glGetError());
 
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_1D, palette_texture);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_1D, palette_texture);
 
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
@@ -198,5 +193,7 @@ public:
 
 		assert(!glGetError());
 	}
+
+	void Clear(Surface *surface, float r, float g, float b);
 };
 

@@ -257,22 +257,27 @@ public:
 
 		bool disable_log = config["disable_log"];
 
-		if (!disable_log) {
+		if (!disable_log && ddsp) {
 			log(json_dump({
 				{ "x", x },{ "y", y },{ "w", ddsp->width },{ "h", ddsp->height }
 			}));
 		}
 
-		r->Render(x, y, &surface, &ddsp->surface);
+		if (ddsp) {
+			r->Render(x, y, 1, 1, &surface, &ddsp->surface);
 
-		bool blt_dump_ddsp = config["blt_dump_ddsp"];
-		bool blt_dump_this = config["blt_dump_this"];
+			bool blt_dump_ddsp = config["blt_dump_ddsp"];
+			bool blt_dump_this = config["blt_dump_this"];
 
-		if (blt_dump_ddsp)
-			ddsp->Dump();
+			if (blt_dump_ddsp)
+				ddsp->Dump();
 
-		if (blt_dump_this) {
-			this->Dump();
+			if (blt_dump_this) {
+				this->Dump();
+			}
+		}
+		else {
+			//r->Clear(&surface);
 		}
 
 		return S_OK;
@@ -287,20 +292,62 @@ public:
 	) {
 		DDRAW_SURFACE_PROXY(Blt);
 
-		int x = 0;
-		int y = 0;
+		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
 
-		if (lpDestRect) {
-			x = lpDestRect->left;
-			y = lpDestRect->top;
+		bool disable_log = config["disable_log"];
+
+		if (!disable_log && lpSrcRect && lpDestRect) {
+			log(json_dump({
+				{ "src.L", lpSrcRect->left },
+				{ "src.R", lpSrcRect->right },
+				{ "src.T", lpSrcRect->top },
+				{ "src.B", lpSrcRect->bottom },
+				{ "dst.L", lpDestRect->left },
+				{ "dst.R", lpDestRect->right },
+				{ "dst.T", lpDestRect->top },
+				{ "dst.B", lpDestRect->bottom },
+				{ "flags", dwFlags }
+			}));
 		}
 
-		if (lpSrcRect) {
-			x -= lpSrcRect->left;
-			y -= lpSrcRect->top;
+
+		if (lpDestRect && lpSrcRect) {
+			int x = lpDestRect->left - lpSrcRect->left;
+			int y = lpDestRect->top - lpSrcRect->top;
+			int sx = 1;
+			int sy = 1;
+
+			if (dwFlags & DDBLT_DDFX) {
+				assert(lpDestRect);
+				if (lpDDBltFx->dwDDFX & DDBLTFX_MIRRORLEFTRIGHT) {
+					x = lpDestRect->right + lpSrcRect->left;
+					sx = -1;
+				}
+				if (lpDDBltFx->dwDDFX & DDBLTFX_MIRRORUPDOWN) {
+					y = lpDestRect->bottom + lpSrcRect->top;
+					sy = -1;
+				}
+			}
+			r->Render(x, y, sx, sy, &surface, &ddsp->surface);
+		}
+		else {
+			r->Clear(&surface, 0, 0, 0);
 		}
 
-		return BltGeneric(x, y, lpDDSrcSurface);
+
+		/*
+		if (dwFlags & DDBLT_COLORFILL) {
+			DWORD fillColor = lpDDBltFx->dwFillColor;
+			float _r = GetRValue(fillColor) / 255.f;
+			float g = GetGValue(fillColor) / 255.f;
+			float b = GetBValue(fillColor) / 255.f;
+			r->Clear(&surface, _r, g, b);
+		}
+		else {
+			r->Render(x, y, &surface, &ddsp->surface);
+		}
+		*/
+		return S_OK;
 	}
 
 	STDMETHOD(BltBatch)(THIS_ LPDDBLTBATCH, DWORD, DWORD) {
@@ -317,15 +364,29 @@ public:
 	) {
 		DDRAW_SURFACE_PROXY(BltFast);
 
-		int x = dwX;
-		int y = dwY;
+		bool disable_log = config["disable_log"];
 
-		if (lpSrcRect) {
-			x -= lpSrcRect->left;
-			y -= lpSrcRect->top;
+		if (!disable_log && lpSrcRect) {
+			log(json_dump({
+				{ "src.L", lpSrcRect->left },
+				{ "src.R", lpSrcRect->right },
+				{ "src.T", lpSrcRect->top },
+				{ "src.B", lpSrcRect->bottom },
+				{ "flags", dwFlags }
+			}));
 		}
 
-		return BltGeneric(x, y, lpDDSrcSurface);
+		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
+
+		int x = dwX - lpSrcRect->left;
+		int y = dwY - lpSrcRect->top;
+
+		r->Render(x, y, 1, 1, &surface, &ddsp->surface);
+
+		return S_OK;
+
+
+		//return BltGeneric(x, y, lpDDSrcSurface);
 	}
 
 	STDMETHOD(DeleteAttachedSurface)(THIS_ DWORD, LPDIRECTDRAWSURFACE3) {
@@ -355,7 +416,7 @@ public:
 		if (i % 5 == 0)
 			GetProxy()->ReloadConfig();
 
-		r->Render(0, 0, &surface, &back_buffer->surface);
+		r->Render(0, 0, 1, 1, &surface, &back_buffer->surface);
 
 		RenderToScreen();
 
@@ -365,7 +426,7 @@ public:
 		window->setVerticalSyncEnabled(true);
 		window->display();
 
-		glClear(GL_COLOR_BUFFER_BIT);
+		//r->Clear(&surface, 0, 0, 0);
 
 		int flip_sleep = config["flip_sleep"];
 		Sleep(flip_sleep);

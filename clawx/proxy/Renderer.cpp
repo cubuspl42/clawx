@@ -172,6 +172,14 @@ void Renderer::SetPalette(LPPALETTEENTRY lpEntries)
 	assert(!glGetError());
 }
 
+void Renderer::Clear(Surface * surface, float r, float g, float b)
+{
+	CreateFramebuffer(surface);
+	glBindFramebuffer(GL_FRAMEBUFFER, surface->fbo);
+	glClearColor(r, g, b, 1);
+	glClear(GL_COLOR_BUFFER_BIT);
+}
+
 Renderer::Surface::Surface(Surface &&x)
 {
 	width = x.width;
