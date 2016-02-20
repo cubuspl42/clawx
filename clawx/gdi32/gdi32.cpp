@@ -1,5 +1,6 @@
 #define DLL_NAME "GDI32"
 
+#include "../proxy/log.h"
 #include "../proxy/proxy.h"
 #include <windows.h>
 
@@ -9,7 +10,11 @@ HINSTANCE hLThis = 0;
 HINSTANCE hL = 0;
 FARPROC p[879] = { 0 };
 
-#define PROXY(a)
+static void proxy_log(const char *f) {
+	log_call("gdi32", f, nullptr);
+}
+
+#define PROXY(a) proxy_log(#a);
 
 BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 {

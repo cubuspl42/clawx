@@ -1,5 +1,6 @@
 #define DLL_NAME "USER32"
 
+#include "../proxy/log.h"
 #include "../proxy/proxy.h"
 #include <windows.h>
 
@@ -11,7 +12,11 @@ HINSTANCE hLThis = 0;
 HINSTANCE hL = 0;
 FARPROC p[1025] = { 0 };
 
-#define PROXY(a)
+static void proxy_log(const char *f) {
+	log_call("user32", f, nullptr);
+}
+
+#define PROXY(a) proxy_log(#a);
 
 BOOL WINAPI DllMain(HINSTANCE hInst, DWORD reason, LPVOID)
 {
@@ -7438,7 +7443,7 @@ extern "C" __declspec(naked) void __stdcall __E__633__()
 // PeekMessageA
 extern "C" __declspec(naked) void __stdcall __E__634__()
 {
-	PROXY(PeekMessageA)
+	// PROXY(PeekMessageA)
 		__asm
 	{
 		jmp p[634 * 4];

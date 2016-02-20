@@ -1,10 +1,10 @@
 {
-  "debug": true,
+  "debug": false,
 
   "fullscreen_width": 1920,
   "fullscreen_height": 1080,
 
-  "windowed": true,
+  "windowed": false,
 
   "window_width": 640,
   "window_height": 480,
@@ -20,9 +20,9 @@
 
   "disable_log": false,
 
-  "blt_dump_ddsp": false,
-  "blt_dump_this": false,
-  "unlock_dump_this": false,
+  "blt_dump_ddsp": true,
+  "blt_dump_this": true,
+  "unlock_dump_this": true,
   "flip_dump": false,
 
   "flip_sleep": 1,

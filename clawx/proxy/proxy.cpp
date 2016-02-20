@@ -178,6 +178,8 @@ inline int pow2roundup(int x)
 
 void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp);
 
+HWND get_hwnd(DirectDrawProxy *ddp);
+
 #define DDRAW_SURFACE_PROXY(method) log_surface_call(#method, this)
 
 class DirectDrawSurfaceProxy : public IDirectDrawSurface3
@@ -304,7 +306,17 @@ public:
 					sy = -1;
 				}
 			}
+
 			r->Render(x, y, sx, sy, 0, &surface, &ddsp->surface);
+
+			if (debug) {
+				if (config("blt_dump_ddsp")) {
+					ddsp->Dump();
+				}
+				if (config("blt_dump_this")) {
+					this->Dump();
+				}
+			}
 		}
 		else if (dwFlags & DDBLT_COLORFILL) {
 			if (!lpDestRect || (lpDestRect->left == 0)) {
@@ -352,6 +364,15 @@ public:
 		int y = dwY - lpSrcRect->top;
 
 		r->Render(x, y, 1, 1, 0, &surface, &ddsp->surface);
+
+		if (debug) {
+			if (config("blt_dump_ddsp")) {
+				ddsp->Dump();
+			}
+			if (config("blt_dump_this")) {
+				this->Dump();
+			}
+		}
 
 		return S_OK;
 
@@ -443,9 +464,10 @@ public:
 	STDMETHOD(GetDC)(THIS_ HDC FAR *a) {
 		DDRAW_SURFACE_PROXY(GetDC);
 
-		*a = (HDC)1;
+		HWND hwnd = get_hwnd(ddp);
+		*a = ::GetDC(hwnd);
 
-		return S_OK;
+		return DDERR_UNSUPPORTED;
 	}
 	STDMETHOD(GetFlipStatus)(THIS_ DWORD) {
 		DDRAW_SURFACE_PROXY(GetFlipStatus);
@@ -631,6 +653,7 @@ std::string read_file(std::string filename) {
 struct DirectDrawProxy : public IDirectDraw2
 {
 	Renderer renderer;
+	HWND hwnd = 0;
 
 	DirectDrawSurfaceProxy *GetFrontBuffer() {
 		return front_buffer;
@@ -642,7 +665,7 @@ struct DirectDrawProxy : public IDirectDraw2
 	}
 
 	DirectDrawProxy(HWND hwnd, int window_width, int window_height)
-		: renderer(hwnd, window_width, window_height)
+		: renderer(hwnd, window_width, window_height), hwnd(hwnd)
 	{
 		r = &renderer;
 	}
@@ -826,6 +849,10 @@ struct DirectDrawProxy : public IDirectDraw2
 		return PROXY_UNIMPLEMENTED();
 	};
 };
+
+HWND get_hwnd(DirectDrawProxy *ddp) {
+	return ddp->hwnd;
+}
 
 const char *html_head = R"HTML(
 <head>
