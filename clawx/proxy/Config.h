@@ -17,6 +17,8 @@ public:
 
 	~Config();
 
+	void ResetPath(std::string path);
+
 	const nlohmann::json & Dict();
 
 	void Reload();
@@ -25,10 +27,8 @@ public:
 
 PROXY_EXPORTS Config * GetConfig();
 
-PROXY_EXPORTS Config * GetDebugConfig();
-
-inline const nlohmann::json & config(Config *cfg, std::string key) {
-	const auto &j = cfg->Dict();
+inline const nlohmann::json & config(std::string key) {
+	const auto &j = GetConfig()->Dict();
 	if (j.find(key) != j.end()) {
 		return j[key];
 	}
@@ -37,12 +37,4 @@ inline const nlohmann::json & config(Config *cfg, std::string key) {
 		MessageBox(0, message.c_str(), "Error", MB_ICONEXCLAMATION);
 		std::exit(1);
 	}
-}
-
-inline const nlohmann::json & config(std::string key) {
-	return config(GetConfig(), key);
-}
-
-inline const nlohmann::json & configd(std::string key) {
-	return config(GetDebugConfig(), key);
 }

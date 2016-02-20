@@ -256,37 +256,6 @@ public:
 		log(img_dump(width, height, surface.texture_buffer.data()));
 	}
 
-	HRESULT BltGeneric(int x, int y, LPDIRECTDRAWSURFACE3 dds) {
-		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy *)dds;
-
-		bool disable_log = config("disable_log");
-
-		if (!disable_log && ddsp) {
-			log(json_dump({
-				{ "x", x },{ "y", y },{ "w", ddsp->width },{ "h", ddsp->height }
-			}));
-		}
-
-		if (ddsp) {
-			r->Render(x, y, 1, 1, 0, &surface, &ddsp->surface);
-
-			bool blt_dump_ddsp = config("blt_dump_ddsp");
-			bool blt_dump_this = config("blt_dump_this");
-
-			if (blt_dump_ddsp)
-				ddsp->Dump();
-
-			if (blt_dump_this) {
-				this->Dump();
-			}
-		}
-		else {
-			//r->Clear(&surface);
-		}
-
-		return S_OK;
-	}
-
 	STDMETHOD(Blt)(
 		 LPRECT               lpDestRect,
 		 LPDIRECTDRAWSURFACE3 lpDDSrcSurface,
@@ -298,20 +267,23 @@ public:
 
 		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
 
-		bool disable_log = config("disable_log");
 
-		if (!disable_log && lpSrcRect && lpDestRect) {
-			log(json_dump({
-				{ "src.L", lpSrcRect->left },
-				{ "src.R", lpSrcRect->right },
-				{ "src.T", lpSrcRect->top },
-				{ "src.B", lpSrcRect->bottom },
-				{ "dst.L", lpDestRect->left },
-				{ "dst.R", lpDestRect->right },
-				{ "dst.T", lpDestRect->top },
-				{ "dst.B", lpDestRect->bottom },
-				{ "flags", dwFlags }
-			}));
+		if(debug) {
+			bool disable_log = config("disable_log");
+
+			if (!disable_log && lpSrcRect && lpDestRect) {
+				log(json_dump({
+					{ "src.L", lpSrcRect->left },
+					{ "src.R", lpSrcRect->right },
+					{ "src.T", lpSrcRect->top },
+					{ "src.B", lpSrcRect->bottom },
+					{ "dst.L", lpDestRect->left },
+					{ "dst.R", lpDestRect->right },
+					{ "dst.T", lpDestRect->top },
+					{ "dst.B", lpDestRect->bottom },
+					{ "flags", dwFlags }
+				}));
+			}
 		}
 
 
@@ -359,17 +331,20 @@ public:
 	) {
 		DDRAW_SURFACE_PROXY(BltFast);
 
-		bool disable_log = config("disable_log");
+		if(debug) {
+			bool disable_log = config("disable_log");
 
-		if (!disable_log && lpSrcRect) {
-			log(json_dump({
-				{ "src.L", lpSrcRect->left },
-				{ "src.R", lpSrcRect->right },
-				{ "src.T", lpSrcRect->top },
-				{ "src.B", lpSrcRect->bottom },
-				{ "flags", dwFlags }
-			}));
+			if (!disable_log && lpSrcRect) {
+				log(json_dump({
+					{ "src.L", lpSrcRect->left },
+					{ "src.R", lpSrcRect->right },
+					{ "src.T", lpSrcRect->top },
+					{ "src.B", lpSrcRect->bottom },
+					{ "flags", dwFlags }
+				}));
+			}
 		}
+
 
 		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
 
@@ -406,26 +381,35 @@ public:
 
 		assert(kind == FRONT_BUFFER);
 
-		static int i = 0;
-		++i;
-		if (i % 5 == 0)
-			GetConfig()->Reload();
+		if(debug) {
+
+			static int i = 0;
+			++i;
+			if (i % 5 == 0)
+				GetConfig()->Reload();
+
+			}
 
 		r->Render(0, 0, 1, 1, -1, &surface, &back_buffer->surface);
 
 		RenderToScreen();
 
-		if (config("flip_dump"))
-			Dump();
+		if(debug) {
+			if (config("flip_dump"))
+				Dump();
+		}
+		
 			
 		window->setVerticalSyncEnabled(true);
 		window->display();
 
 		//r->Clear(&surface, 0, 0, 0);
 
-		int flip_sleep = config("flip_sleep");
-		Sleep(flip_sleep);
-
+		if(debug) {
+			int flip_sleep = config("flip_sleep");
+			Sleep(flip_sleep);
+		}
+	
 		window->setVerticalSyncEnabled(false);
 
 		return S_OK;
@@ -564,7 +548,7 @@ public:
 			window->display();
 		}
 
-		if (config("unlock_dump_this"))
+		if (debug && config("unlock_dump_this"))
 			this->Dump();
 			
 		return S_OK;
@@ -613,6 +597,8 @@ void render_to_screen(DirectDrawSurfaceProxy *ddsp) {
 }
 
 void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp) {
+	if(!debug) return;
+
 	bool disable_log = config("disable_log");
 
 	if (disable_log) {
@@ -854,8 +840,10 @@ class Proxy : public IProxy {
 public:
 
 	Proxy() {
-		std::string log_filename = config("log_filename");
-		_log.open(log_filename.c_str());
+		if(debug) {
+			std::string log_filename = config("log_filename");
+			_log.open(log_filename.c_str());
+		}
 
 		_log << html_head;
 
@@ -926,6 +914,8 @@ public:
 	}
 
 	void Log(std::string s) {
+		if(!debug) return;
+
 		bool disable_log = config("disable_log");
 
 		if (disable_log) {

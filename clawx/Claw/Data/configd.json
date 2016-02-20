@@ -1,0 +1,54 @@
+{
+  "enable_sfml_proxy": false,
+  "enable_outer_proxy": true,
+
+  "log_filename": "log.html",
+  "log_prolog_filename": "log_prolog.html",
+
+  "disable_log": true,
+
+  "show_messagebox": false,
+
+  "disable_proxy": true,
+
+  "CreateWindowExA_nWidth": 640,
+  "CreateWindowExA_nHeight": 480,
+
+  "SetDisplayMode_w": 1920,
+  "SetDisplayMode_h": 1080,
+
+  "GetDisplayMode_w": 640,
+  "GetDisplayMode_h": 480,
+
+  "GetSurfaceDesc_backbuffer_w": 640,
+  "GetSurfaceDesc_backbuffer_h": 480,
+
+  "SetCooperativeLevel_flags": [ "DDSCL_FULLSCREEN" ],
+
+  "Blt_enable": true,
+  "BltFast_enable": true,
+
+  "backbuffer_w": 640,
+  "backbuffer_h": 480,
+
+  "copy_backbuffer": true,
+  "update_backbuffer": true,
+  "draw_backbuffer": true,
+
+  "draw_rects": true,
+
+  "window_clear": true,
+  "vsync": true,
+
+  "lock_textures": true,
+
+  "blt_dump_ddsp": false,
+  "blt_dump_this": false,
+  "unlock_dump_this": false,
+  "flip_dump": false,
+
+  "flip_sleep": 1,
+
+  "sx": 0.003125,
+  "sy": 0.004167
+}
