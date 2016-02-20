@@ -1,15 +1,11 @@
 #pragma once
 
+#include "proxy_exports.h"
+
 #include "json.hpp"
 
 #include <windows.h>
 #include <ddraw.h>
-
-#ifdef PROXY_EXPORTS
-#define PROXY_EXPORTS __declspec(dllexport)
-#else
-#define PROXY_EXPORTS __declspec(dllimport)
-#endif
 
 using DirectDrawCreatePtr = decltype(&DirectDrawCreate);
 
@@ -41,10 +37,6 @@ public:
 		LPDIRECTDRAW *lplpDD,
 		IUnknown     *pUnkOuter
 	) = 0;
-
-	virtual void ReloadConfig() = 0;
-
-	virtual const nlohmann::json &GetConfig() = 0;
 
 	virtual void Log(std::string s) = 0;
 };

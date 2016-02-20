@@ -4,7 +4,7 @@
 
 #include <windows.h>
 
-#define config (GetProxy()->GetConfig())
+//#define config (GetProxy()->GetConfig())
 
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
@@ -14,10 +14,10 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH: {
-		bool show_messagebox = config["show_messagebox"];
+		//bool show_messagebox = config["show_messagebox"];
 
-		if(show_messagebox)
-			MessageBox(0, "", "", 0);
+		//if(show_messagebox)
+			//MessageBox(0, "", "", 0);
 	}
 		break;
 	case DLL_THREAD_ATTACH:

@@ -1,4 +1,6 @@
 {
+  "debug": false,
+
   "enable_sfml_proxy": false,
   "enable_outer_proxy": true,
 

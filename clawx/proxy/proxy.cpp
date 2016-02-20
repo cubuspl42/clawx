@@ -5,6 +5,7 @@
 #include "dump.h"
 #include "utils.h"
 
+#include "Config.h"
 #include "Renderer.h"
 
 #include "json.hpp"
@@ -17,13 +18,13 @@
 #include <fstream>
 #include <unordered_map>
 
-#define config (GetProxy()->GetConfig())
-
 using json = nlohmann::json;
 
 const unsigned MAGIC = 0x1a1b1c00;
 
 bool DISABLE_PROXY = false;
+
+const bool debug = config("debug");
 
 sf::Window *window;
 
@@ -258,7 +259,7 @@ public:
 	HRESULT BltGeneric(int x, int y, LPDIRECTDRAWSURFACE3 dds) {
 		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy *)dds;
 
-		bool disable_log = config["disable_log"];
+		bool disable_log = config("disable_log");
 
 		if (!disable_log && ddsp) {
 			log(json_dump({
@@ -269,8 +270,8 @@ public:
 		if (ddsp) {
 			r->Render(x, y, 1, 1, 0, &surface, &ddsp->surface);
 
-			bool blt_dump_ddsp = config["blt_dump_ddsp"];
-			bool blt_dump_this = config["blt_dump_this"];
+			bool blt_dump_ddsp = config("blt_dump_ddsp");
+			bool blt_dump_this = config("blt_dump_this");
 
 			if (blt_dump_ddsp)
 				ddsp->Dump();
@@ -297,7 +298,7 @@ public:
 
 		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
 
-		bool disable_log = config["disable_log"];
+		bool disable_log = config("disable_log");
 
 		if (!disable_log && lpSrcRect && lpDestRect) {
 			log(json_dump({
@@ -358,7 +359,7 @@ public:
 	) {
 		DDRAW_SURFACE_PROXY(BltFast);
 
-		bool disable_log = config["disable_log"];
+		bool disable_log = config("disable_log");
 
 		if (!disable_log && lpSrcRect) {
 			log(json_dump({
@@ -408,13 +409,13 @@ public:
 		static int i = 0;
 		++i;
 		if (i % 5 == 0)
-			GetProxy()->ReloadConfig();
+			GetConfig()->Reload();
 
 		r->Render(0, 0, 1, 1, -1, &surface, &back_buffer->surface);
 
 		RenderToScreen();
 
-		if (config["flip_dump"])
+		if (config("flip_dump"))
 			Dump();
 			
 		window->setVerticalSyncEnabled(true);
@@ -422,7 +423,7 @@ public:
 
 		//r->Clear(&surface, 0, 0, 0);
 
-		int flip_sleep = config["flip_sleep"];
+		int flip_sleep = config("flip_sleep");
 		Sleep(flip_sleep);
 
 		window->setVerticalSyncEnabled(false);
@@ -563,7 +564,7 @@ public:
 			window->display();
 		}
 
-		if (config["unlock_dump_this"])
+		if (config("unlock_dump_this"))
 			this->Dump();
 			
 		return S_OK;
@@ -612,7 +613,7 @@ void render_to_screen(DirectDrawSurfaceProxy *ddsp) {
 }
 
 void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp) {
-	bool disable_log = config["disable_log"];
+	bool disable_log = config("disable_log");
 
 	if (disable_log) {
 		return;
@@ -715,8 +716,8 @@ struct DirectDrawProxy : public IDirectDraw2
 
 		if (ddsd->dwBackBufferCount) {
 			kind = DirectDrawSurfaceProxy::FRONT_BUFFER;
-			width = config["backbuffer_w"];
-			height = config["backbuffer_h"];
+			width = config("backbuffer_w");
+			height = config("backbuffer_h");
 		}
 
 		size_t d_h = kind == DirectDrawSurfaceProxy::FRONT_BUFFER ? h(ddsd) : ddsd00_h(ddsd);
@@ -846,7 +847,6 @@ const char *html_head = R"HTML(
 )HTML";
 
 class Proxy : public IProxy {
-	json _config;
 	std::ofstream _log;
 
 	DirectDrawProxy *ddp = nullptr;
@@ -854,9 +854,7 @@ class Proxy : public IProxy {
 public:
 
 	Proxy() {
-		ReloadConfig();
-
-		std::string log_filename = _config["log_filename"];
+		std::string log_filename = config("log_filename");
 		_log.open(log_filename.c_str());
 
 		_log << html_head;
@@ -881,12 +879,12 @@ public:
 		HINSTANCE hInstance,
 		LPVOID    lpParam
 	) {
-		if (config["CreateWindowExA_disable_style"]) {
+		if (config("CreateWindowExA_disable_style")) {
 			dwStyle = 0;
 		}
 
-		nWidth = config["CreateWindowExA_nWidth"];
-		nHeight = config["CreateWindowExA_nHeight"];
+		nWidth = config("CreateWindowExA_nWidth");
+		nHeight = config("CreateWindowExA_nHeight");
 
 		HWND hWnd = _CreateWindowExA(
 			dwExStyle,
@@ -905,7 +903,7 @@ public:
 
 		window->create(hWnd);
 
-		bool vsync = config["vsync"];
+		bool vsync = config("vsync");
 
 		window->setVerticalSyncEnabled(vsync);
 
@@ -927,18 +925,8 @@ public:
 		return S_OK;
 	}
 
-	void ReloadConfig() {
-		std::ifstream cfg_file;
-		cfg_file.open("config.json");
-		_config << cfg_file;
-	}
-
-	const json &GetConfig() {
-		return _config;
-	}
-
 	void Log(std::string s) {
-		bool disable_log = _config["disable_log"];
+		bool disable_log = config("disable_log");
 
 		if (disable_log) {
 			return;
