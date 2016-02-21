@@ -2209,23 +2209,45 @@ extern "C" HWND WINAPI __E__112__(
 
 	F _CreateWindowExA = (F)p[112];
 
-	HWND hWnd = GetProxy()->CreateWindowExA(
-		_CreateWindowExA,
-		dwExStyle,
-		lpClassName,
-		lpWindowName,
-		dwStyle, // WS_SYSMENU | WS_POPUP 
-		x,
-		y,
-		nWidth,
-		nHeight,
-		hWndParent,
-		hMenu,
-		hInstance,
-		lpParam
-	);
+	static int i = 0;
 
-	return hWnd;
+	if (i++ == 0) {
+		HWND hWnd = GetProxy()->CreateWindowExA(
+			_CreateWindowExA,
+			dwExStyle,
+			lpClassName,
+			lpWindowName,
+			dwStyle, // WS_SYSMENU | WS_POPUP 
+			x,
+			y,
+			nWidth,
+			nHeight,
+			hWndParent,
+			hMenu,
+			hInstance,
+			lpParam
+		);
+
+		return hWnd;
+	}
+	else {
+		HWND hWnd = _CreateWindowExA(
+			dwExStyle,
+			lpClassName,
+			lpWindowName,
+			dwStyle,
+			x,
+			y,
+			nWidth,
+			nHeight,
+			hWndParent,
+			hMenu,
+			hInstance,
+			lpParam
+		);
+
+		return hWnd;
+	}
 }
 
 // CreateWindowExW

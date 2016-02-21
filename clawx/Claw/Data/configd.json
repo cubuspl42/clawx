@@ -20,10 +20,10 @@
 
   "disable_log": false,
 
-  "blt_dump_ddsp": true,
-  "blt_dump_this": true,
-  "unlock_dump_this": true,
-  "flip_dump": true,
+  "blt_dump_ddsp": false,
+  "blt_dump_this": false,
+  "unlock_dump_this": false,
+  "flip_dump": false,
 
   "flip_sleep": 1,
 

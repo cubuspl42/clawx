@@ -71,7 +71,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 	std::vector<PALETTEENTRY> entries;
 
 	DirectDrawPaletteProxy(Renderer *renderer) {
-		
+
 		this->renderer = renderer;
 
 		entries.resize(PALETTE_SIZE);
@@ -104,7 +104,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 		DWORD          dwBase,
 		DWORD          dwNumEntries,
 		LPPALETTEENTRY lpEntries
-	) {
+		) {
 		DDRAW_PALETTE_PROXY(GetEntries);
 
 		assert(dwBase == 0 && dwNumEntries == PALETTE_SIZE);
@@ -126,7 +126,7 @@ struct DirectDrawPaletteProxy : public IDirectDrawPalette
 		DWORD          dwStartingEntry,
 		DWORD          dwCount,
 		LPPALETTEENTRY lpEntries
-	) {
+		) {
 		DDRAW_PALETTE_PROXY(SetEntries);
 
 		assert(dwStartingEntry == 0 && dwCount == PALETTE_SIZE);
@@ -218,7 +218,7 @@ public:
 		this->height = height;
 
 		this->surface = r->CreateSurface(width, height, kind == FRONT_BUFFER);
-	
+
 		AddRef();
 	}
 
@@ -262,18 +262,18 @@ public:
 	}
 
 	STDMETHOD(Blt)(
-		 LPRECT               lpDestRect,
-		 LPDIRECTDRAWSURFACE3 lpDDSrcSurface,
-		 LPRECT               lpSrcRect,
-		 DWORD                dwFlags,
-		 LPDDBLTFX            lpDDBltFx
-	) {
+		LPRECT               lpDestRect,
+		LPDIRECTDRAWSURFACE3 lpDDSrcSurface,
+		LPRECT               lpSrcRect,
+		DWORD                dwFlags,
+		LPDDBLTFX            lpDDBltFx
+		) {
 		DDRAW_SURFACE_PROXY(Blt);
 
 		DirectDrawSurfaceProxy *ddsp = (DirectDrawSurfaceProxy *)lpDDSrcSurface;
 
 
-		if(debug) {
+		if (debug) {
 			bool disable_log = config("disable_log");
 
 			if (!disable_log && lpSrcRect && lpDestRect) {
@@ -343,10 +343,10 @@ public:
 		LPDIRECTDRAWSURFACE3 lpDDSrcSurface,
 		LPRECT               lpSrcRect,
 		DWORD                dwFlags
-	) {
+		) {
 		DDRAW_SURFACE_PROXY(BltFast);
 
-		if(debug) {
+		if (debug) {
 			bool disable_log = config("disable_log");
 
 			if (!disable_log && lpSrcRect) {
@@ -405,35 +405,35 @@ public:
 
 		assert(kind == FRONT_BUFFER);
 
-		if(debug) {
+		if (debug) {
 
 			static int i = 0;
 			++i;
 			if (i % 5 == 0)
 				GetConfig()->Reload();
 
-			}
+		}
 
 		r->Render(0, 0, 1, 1, -1, &surface, &back_buffer->surface);
 
 		RenderToScreen();
 
-		if(debug) {
+		if (debug) {
 			if (config("flip_dump"))
 				Dump();
 		}
-		
-			
+
+
 		window->setVerticalSyncEnabled(true);
 		window->display();
 
 		//r->Clear(&surface, 0, 0, 0);
 
-		if(debug) {
+		if (debug) {
 			int flip_sleep = config("flip_sleep");
 			Sleep(flip_sleep);
 		}
-	
+
 		window->setVerticalSyncEnabled(false);
 
 		return S_OK;
@@ -445,7 +445,7 @@ public:
 		*out_dds = ddsp;
 
 		back_buffer = ddsp;
-			
+
 		return S_OK;
 	}
 	STDMETHOD(GetBltStatus)(THIS_ DWORD) {
@@ -467,8 +467,11 @@ public:
 	STDMETHOD(GetDC)(THIS_ HDC FAR *a) {
 		DDRAW_SURFACE_PROXY(GetDC);
 
+		*a = (HDC)1;
+// TODO: Support GDI drawing
+#if 0
 		if (!hdcMem) {
-			assert(!hdcBm);
+			assert(!memBm);
 			HDC hdcScreen = ::GetDC(0);
 			hdcMem = CreateCompatibleDC(hdcScreen);
 			memBm = CreateCompatibleBitmap(hdcScreen, width, height);
@@ -476,8 +479,8 @@ public:
 		}
 
 		*a = hdcMem;
-
-		return DDERR_UNSUPPORTED;
+#endif
+		return S_OK;
 	}
 	STDMETHOD(GetFlipStatus)(THIS_ DWORD) {
 		DDRAW_SURFACE_PROXY(GetFlipStatus);
@@ -534,10 +537,19 @@ public:
 
 	STDMETHOD(ReleaseDC)(THIS_ HDC hdc) {
 		DDRAW_SURFACE_PROXY(ReleaseDC);
+
+// TODO: Support GDI drawing
+#if 0
 		assert(hdc == hdcMem);
 
+		BITMAPINFO bmInfo = { 0 };
+		bmInfo.bmiHeader.biSize = sizeof(bmInfo.bmiHeader);
 
+		GetDIBits(hdcMem, memBm, 0, 0, nullptr, &bmInfo, DIB_PAL_COLORS);
 
+		int error = GetDIBits(hdcMem, memBm, 0, height, surface.texture_buffer.data(), &bmInfo, DIB_PAL_COLORS);
+		assert(error != 0);
+#endif
 		return S_OK;
 	}
 
@@ -553,7 +565,7 @@ public:
 
 	STDMETHOD(SetColorKey)(THIS_ DWORD a, LPDDCOLORKEY b) {
 		DDRAW_SURFACE_PROXY(SetColorKey);
-		
+
 		assert(b->dwColorSpaceHighValue == 0 && b->dwColorSpaceLowValue == 0);
 
 		return S_OK;
@@ -566,7 +578,7 @@ public:
 
 	STDMETHOD(SetPalette)(THIS_ LPDIRECTDRAWPALETTE a) {
 		DDRAW_SURFACE_PROXY(SetPalette);
-		
+
 		ddpp = (DirectDrawPaletteProxy *)a;
 
 		r->SetPalette(&ddpp->palette);
@@ -586,7 +598,7 @@ public:
 
 		if (debug && config("unlock_dump_this"))
 			this->Dump();
-			
+
 		return S_OK;
 	}
 
@@ -633,7 +645,7 @@ void render_to_screen(DirectDrawSurfaceProxy *ddsp) {
 }
 
 void log_surface_call(const char *method, DirectDrawSurfaceProxy* ddsp) {
-	if(!debug) return;
+	if (!debug) return;
 
 	bool disable_log = config("disable_log");
 
@@ -715,18 +727,18 @@ struct DirectDrawProxy : public IDirectDraw2
 	}
 
 	STDMETHOD(CreatePalette)(
-			DWORD                   dwFlags,
-			LPPALETTEENTRY          lpDDColorArray,
-			LPDIRECTDRAWPALETTE FAR *lplpDDPalette,
-			IUnknown FAR            *pUnkOuter
-	) {
+		DWORD                   dwFlags,
+		LPPALETTEENTRY          lpDDColorArray,
+		LPDIRECTDRAWPALETTE FAR *lplpDDPalette,
+		IUnknown FAR            *pUnkOuter
+		) {
 		DDRAW_PROXY(CreatePalette);
 
 		auto ddpp = new DirectDrawPaletteProxy(&renderer);
 		*lplpDDPalette = ddpp;
 
 		ddpp->SetEntries(dwFlags, 0, DirectDrawPaletteProxy::PALETTE_SIZE, lpDDColorArray);
-		
+
 		return S_OK;
 	}
 
@@ -882,7 +894,7 @@ class Proxy : public IProxy {
 public:
 
 	Proxy() {
-		if(debug) {
+		if (debug) {
 			std::string log_filename = config("log_filename");
 			_log.open(log_filename.c_str());
 		}
@@ -908,7 +920,7 @@ public:
 		HMENU     hMenu,
 		HINSTANCE hInstance,
 		LPVOID    lpParam
-	) {
+		) {
 		if (config("windowed")) {
 			dwStyle = 0;
 			nWidth = config("window_width");
@@ -932,7 +944,7 @@ public:
 			hMenu,
 			hInstance,
 			lpParam
-		);
+			);
 
 		window->create(hWnd);
 
@@ -950,7 +962,7 @@ public:
 		GUID *lpGUID,
 		LPDIRECTDRAW *lplpDD,
 		IUnknown     *pUnkOuter
-	) {
+		) {
 		assert(ddp);
 
 		*lplpDD = (IDirectDraw *)ddp;
@@ -959,7 +971,7 @@ public:
 	}
 
 	void Log(std::string s) {
-		if(!debug) return;
+		if (!debug) return;
 
 		bool disable_log = config("disable_log");
 

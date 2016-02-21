@@ -90,60 +90,7 @@ public:
 
 	void SetPalette(Palette *palette);
 
-	void Render(int x, int y, int sx_, int sy_, int color_key, Surface *a, Surface *b) {
-		CreateFramebuffer(a);
-
-		glViewport(0, 0, FRONTBUFFER_WIDTH, FRONTBUFFER_HEIGHT);
-
-		GLuint fbo = a->fbo;
-		GLuint program = surface_program;
-		auto &surface = *b;
-
-		glUseProgram(program);
-		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
-		assert(!glGetError());
-
-		glm::mat4 trans;
-
-		if (fbo == 0) {
-			trans = glm::scale(trans, { 1, -1, 1 });
-		}
-
-		trans = glm::translate(trans, { -1, -1, 0 });
-
-		float sx = 2 / 640.f;
-		float sy = 2 / 480.f;
-
-		trans = glm::scale(trans, { sx, sy, 1 });
-
-		trans = glm::translate(trans, { x, y, 0 });
-
-		trans = glm::scale(trans, { sx_, sy_, 0 });
-
-		GLint uniTrans = glGetUniformLocation(program, "trans");
-		if (uniTrans >= 0)
-			glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(trans));
-
-		GLint uniCk = glGetUniformLocation(program, "color_key");
-		if (uniCk >= 0)
-			glUniform1i(uniCk, color_key);
-
-		assert(!glGetError());
-
-		glBindVertexArray(surface.vao);
-
-		assert(!glGetError());
-
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, surface.texture);
-
-		assert(!glGetError());
-
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-		assert(!glGetError());
-	}
+	void Render(int x, int y, int sx_, int sy_, int color_key, Surface *a, Surface *b);
 
 	void RenderToScreen(Surface *b) {
 		if (!palette)
