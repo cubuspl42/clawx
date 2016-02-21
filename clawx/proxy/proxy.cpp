@@ -501,6 +501,9 @@ public:
 		DDRAW_SURFACE_PROXY(GetDC);
 
 		*a = (HDC)1;
+
+		*a = ::GetDC(get_hwnd(ddp));
+
 // TODO: Support GDI drawing
 #if 0
 		if (!hdcMem) {

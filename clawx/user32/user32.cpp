@@ -1941,7 +1941,7 @@ extern "C" __declspec(naked) void __stdcall __E__86__()
 // CopyRect
 extern "C" __declspec(naked) void __stdcall __E__87__()
 {
-	PROXY(CopyRect)
+	// PROXY(CopyRect)
 		__asm
 	{
 		jmp p[87 * 4];

@@ -16,6 +16,7 @@
 *.txt
 *.ini
 *.usr
+*.wwd
 .vs/
 doc/
 Debug/

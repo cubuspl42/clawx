@@ -18,11 +18,11 @@
   "log_filename": "log.html",
   "log_prolog_filename": "log_prolog.html",
 
-  "disable_log": true,
+  "disable_log": false,
 
   "blt_dump_ddsp": false,
   "blt_dump_this": false,
-  "unlock_dump_this": false,
+  "unlock_dump_this": true,
   "flip_dump": false,
   "progressbar_dump": true,
 
