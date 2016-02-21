@@ -15,9 +15,6 @@
 
 #include <vector>
 
-const int FRONTBUFFER_WIDTH = 640;
-const int FRONTBUFFER_HEIGHT = 480;
-
 struct Renderer
 {
 	sf::Window window;
@@ -39,6 +36,9 @@ struct Renderer
 	void LoadProgressbarProgram();
 
 public:
+	static const int FRONTBUFFER_WIDTH = 640;
+	static const int FRONTBUFFER_HEIGHT = 480;
+
 	struct Surface {
 		int width = 0;
 		int height = 0;

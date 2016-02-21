@@ -310,7 +310,15 @@ public:
 				}
 			}
 
-			r->Render(x, y, sx, sy, 0, &surface, &ddsp->surface);
+			int color_key = 0;
+
+			if (ddsp->width == Renderer::FRONTBUFFER_WIDTH &&
+				ddsp->height == Renderer::FRONTBUFFER_HEIGHT) {
+
+				color_key = -1;
+			}
+
+			r->Render(x, y, sx, sy, color_key, &surface, &ddsp->surface);
 
 			if (debug) {
 				if (config("blt_dump_ddsp")) {
