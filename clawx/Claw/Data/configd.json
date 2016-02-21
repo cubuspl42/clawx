@@ -24,6 +24,7 @@
   "blt_dump_this": false,
   "unlock_dump_this": false,
   "flip_dump": false,
+  "progressbar_dump": true,
 
   "flip_sleep": 1,
 

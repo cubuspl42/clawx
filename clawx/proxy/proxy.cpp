@@ -327,6 +327,30 @@ public:
 				DWORD fillColor = lpDDBltFx->dwFillColor;
 				r->Clear(&surface, fillColor);
 			}
+			else if(lpDestRect) {
+			
+				assert(kind == FRONT_BUFFER);
+				int x = lpDestRect->left;
+				int y = lpDestRect->top;
+				int w = lpDestRect->right - lpDestRect->left;
+				int h = lpDestRect->bottom - lpDestRect->top;
+				DWORD fillColor = lpDDBltFx->dwFillColor;
+
+				r->RenderProgressBar(&surface, fillColor, x, y, w, h);
+				RenderToScreen();
+				window->display();
+
+				if (debug) {
+					if (config("progressbar_dump")) {
+						Dump();
+					}
+					log("progressbar");
+					if (debug) {
+						log(json_dump({ { "color_index", fillColor } }));
+					}
+				}
+				
+			}
 		}
 
 		return S_OK;

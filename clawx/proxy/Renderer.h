@@ -26,13 +26,17 @@ struct Renderer
 	Palette *palette = nullptr;
 
 	GLuint surface_program = 0;
-	GLuint frontbuffer_program;
+	GLuint frontbuffer_program = 0;
+	GLuint progressbar_program = 0;
+	GLuint progressbar_vao = 0;
 
 	void InitGl();
 
 	void LoadSurfaceProgram();
 
 	void LoadFrontbufferProgram();
+
+	void LoadProgressbarProgram();
 
 public:
 	struct Surface {
@@ -151,6 +155,8 @@ public:
 
 		assert(!glGetError());
 	}
+
+	void RenderProgressBar(Surface *surface, int color_index, int x, int y, int w, int h);
 
 	void Clear(Surface *surface, int color);
 };

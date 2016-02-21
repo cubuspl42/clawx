@@ -9,6 +9,8 @@ static const std::string SURFACE_VERTEX_SHADER = "surface.vert";
 static const std::string SURFACE_FRAGMENT_SHADER = "surface.frag";
 static const std::string FRONTBUFFER_VERTEX_SHADER = "frontbuffer.vert";
 static const std::string FRONTBUFFER_FRAGMENT_SHADER = "frontbuffer.frag";
+static const std::string PROGRESSBAR_VERTEX_SHADER = "progressbar.vert";
+static const std::string PROGRESSBAR_FRAGMENT_SHADER = "progressbar.frag";
 
 static std::string read_file(std::string filename) {
 	std::ifstream f(filename.c_str());
@@ -109,6 +111,60 @@ void Renderer::LoadFrontbufferProgram() {
 	assert(!glGetError());
 }
 
+void Renderer::LoadProgressbarProgram()
+{
+	assert(!glGetError());
+
+	GLuint vertexShader = create_shader(GL_VERTEX_SHADER, PROGRESSBAR_VERTEX_SHADER);
+	GLuint fragmentShader = create_shader(GL_FRAGMENT_SHADER, PROGRESSBAR_FRAGMENT_SHADER);
+
+	progressbar_program = create_program(vertexShader, fragmentShader);
+
+	assert(!glGetError());
+
+	glGenVertexArrays(1, &progressbar_vao);
+	glBindVertexArray(progressbar_vao);
+
+	GLuint ebo;
+
+	// Create an element array
+	glGenBuffers(1, &ebo);
+
+	GLuint elements[] = {
+		0, 1, 2,
+		2, 3, 0
+	};
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elements), elements, GL_STATIC_DRAW);
+
+	GLuint vbo;
+
+	// Create a Vertex Buffer Object and copy the vertex data to it
+	glGenBuffers(1, &vbo);
+
+	GLfloat vertices[] = {
+		0,	0, // Top-left
+		1,	0, // Top-right
+		1,	1, // Bottom-right
+		0,	1, // Bottom-left
+	};
+
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+	assert(!glGetError());
+
+	// Specify the layout of the vertex data
+	GLint posAttrib = glGetAttribLocation(progressbar_program, "position");
+	if (posAttrib >= 0) {
+		glEnableVertexAttribArray(posAttrib);
+		glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat), 0);
+	}
+
+	assert(!glGetError());
+}
+
 Renderer::Renderer(HWND hwnd, int window_width, int window_height)
 	: window_width(window_width), window_height(window_height)
 {
@@ -116,6 +172,7 @@ Renderer::Renderer(HWND hwnd, int window_width, int window_height)
 
 	LoadSurfaceProgram();
 	LoadFrontbufferProgram();
+	LoadProgressbarProgram();
 }
 
 Renderer::~Renderer()
@@ -189,6 +246,65 @@ void Renderer::Render(int x, int y, int sx_, int sy_, int color_key, Surface * a
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, surface.texture);
+
+	assert(!glGetError());
+
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+	assert(!glGetError());
+}
+
+void Renderer::RenderProgressBar(Surface *a, int color_index, int x, int y, int w, int h)
+{
+	CreateFramebuffer(a);
+
+	assert(!glGetError());
+
+	glViewport(0, 0, FRONTBUFFER_WIDTH, FRONTBUFFER_HEIGHT);
+
+	assert(!glGetError());
+
+	GLuint fbo = a->fbo;
+	GLuint program = progressbar_program;
+
+	glUseProgram(program);
+
+	check_gl_error();
+
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+	check_gl_error();
+
+	glm::mat4 trans;
+
+	if (fbo == 0) {
+		trans = glm::scale(trans, { 1, -1, 1 });
+	}
+
+	trans = glm::translate(trans, { -1, -1, 0 });
+
+	float sx = 2 / 640.f;
+	float sy = 2 / 480.f;
+
+	trans = glm::scale(trans, { sx, sy, 1 });
+
+	trans = glm::translate(trans, { x, y, 0 });
+
+	trans = glm::scale(trans, { w, h, 0 });
+
+	GLint uniTrans = glGetUniformLocation(program, "trans");
+	if (uniTrans >= 0)
+		glUniformMatrix4fv(uniTrans, 1, GL_FALSE, glm::value_ptr(trans));
+
+	assert(!glGetError());
+
+	GLint uniColor = glGetUniformLocation(program, "color_index");
+	if (uniColor >= 0)
+		glUniform1i(uniColor, color_index);
+
+	assert(!glGetError());
+
+	glBindVertexArray(progressbar_vao);
 
 	assert(!glGetError());
 
