@@ -254,7 +254,7 @@ void Renderer::Render(int x, int y, int sx_, int sy_, int color_key, Surface * a
 	assert(!glGetError());
 }
 
-void Renderer::RenderProgressBar(Surface *a, int color_index, int x, int y, int w, int h)
+void Renderer::RenderRect(Surface *a, int color_index, int x, int y, int w, int h)
 {
 	CreateFramebuffer(a);
 

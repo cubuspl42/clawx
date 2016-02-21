@@ -156,7 +156,7 @@ public:
 		assert(!glGetError());
 	}
 
-	void RenderProgressBar(Surface *surface, int color_index, int x, int y, int w, int h);
+	void RenderRect(Surface *surface, int color_index, int x, int y, int w, int h);
 
 	void Clear(Surface *surface, int color);
 };
