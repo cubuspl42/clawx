@@ -206,6 +206,9 @@ public:
 
 	Renderer::Surface surface;
 
+	HDC hdcMem = 0; // TODO: cleanup
+	HBITMAP memBm = 0;
+
 	DirectDrawSurfaceProxy(DirectDrawProxy *ddp, Kind kind, size_t d_h, int width, int height) {
 		this->ddp = ddp;
 		this->d_h = d_h;
@@ -464,8 +467,15 @@ public:
 	STDMETHOD(GetDC)(THIS_ HDC FAR *a) {
 		DDRAW_SURFACE_PROXY(GetDC);
 
-		HWND hwnd = get_hwnd(ddp);
-		*a = ::GetDC(hwnd);
+		if (!hdcMem) {
+			assert(!hdcBm);
+			HDC hdcScreen = ::GetDC(0);
+			hdcMem = CreateCompatibleDC(hdcScreen);
+			memBm = CreateCompatibleBitmap(hdcScreen, width, height);
+			SelectObject(hdcMem, memBm);
+		}
+
+		*a = hdcMem;
 
 		return DDERR_UNSUPPORTED;
 	}
@@ -522,8 +532,12 @@ public:
 		return S_OK;
 	}
 
-	STDMETHOD(ReleaseDC)(THIS_ HDC a) {
+	STDMETHOD(ReleaseDC)(THIS_ HDC hdc) {
 		DDRAW_SURFACE_PROXY(ReleaseDC);
+		assert(hdc == hdcMem);
+
+
+
 		return S_OK;
 	}
 

@@ -3227,6 +3227,7 @@ extern "C" int WINAPI __E__212__(
 	_In_    UINT    uFormat
 ){
 	PROXY(DrawTextA)
+		log(lpchText);
 		return 16;
 }
 

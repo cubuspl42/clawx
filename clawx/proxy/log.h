@@ -45,6 +45,13 @@ inline std::string img_dump(int w, int h, const byte *data) {
 	return img("dump", filename);
 }
 
+inline std::string img_dump_rgba(int w, int h, const byte *data) {
+	static int i = 0;
+	std::string filename = "img/" + std::to_string(i++) + ".png";
+	stbi_write_png(filename.c_str(), w, h, 4, data, w);
+	return img("dump", filename);
+}
+
 inline std::string json_dump(nlohmann::json j) {
 	return tag("data", { {"class", "json"} }, j.dump(2));
 }
